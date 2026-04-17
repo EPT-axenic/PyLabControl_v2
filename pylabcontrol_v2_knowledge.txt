@@ -1,0 +1,721 @@
+### PYLABCONTROL ARCHITECTURE REFERENCE ###
+The following is a consolidated codebase containing all active .py and .toml files.
+
+
+================================================================================
+### FILE: pack_repo.py ###
+================================================================================
+
+import os
+
+# --- Configuration ---
+# Point this to your unzipped GitHub repository folder
+ROOT_DIR = "." 
+OUTPUT_FILE = "pylabcontrol_knowledge.txt"
+
+# Only grab the files we care about for the architecture
+ALLOWED_EXTENSIONS = {".py", ".toml", ".md"}
+
+# Folders to completely ignore so we don't waste tokens
+IGNORE_DIRS = {".git", "__pycache__", ".venv", "venv", ".vscode", "tests", "docs"}
+
+def consolidate_codebase():
+    file_count = 0
+    with open(OUTPUT_FILE, "w", encoding="utf-8") as outfile:
+        # Add a primer for the Gem at the top of the file
+        outfile.write("### PYLABCONTROL ARCHITECTURE REFERENCE ###\n")
+        outfile.write("The following is a consolidated codebase containing all active .py and .toml files.\n\n")
+        
+        for root, dirs, files in os.walk(ROOT_DIR):
+            # Modify dirs in-place to skip ignored directories
+            dirs[:] = [d for d in dirs if d not in IGNORE_DIRS]
+
+            for file in files:
+                ext = os.path.splitext(file)[1].lower()
+                if ext in ALLOWED_EXTENSIONS:
+                    file_path = os.path.join(root, file)
+                    rel_path = os.path.relpath(file_path, ROOT_DIR)
+                    
+                    # Write clear delimiters that Gemini looks for
+                    outfile.write(f"\n{'='*80}\n")
+                    outfile.write(f"### FILE: {rel_path} ###\n")
+                    outfile.write(f"{'='*80}\n\n")
+                    
+                    try:
+                        with open(file_path, "r", encoding="utf-8") as infile:
+                            outfile.write(infile.read())
+                            outfile.write("\n")
+                            file_count += 1
+                    except Exception as e:
+                        outfile.write(f"# Error reading file: {e}\n")
+
+    print(f"✅ Success! Packed {file_count} files into {OUTPUT_FILE}.")
+    size_mb = os.path.getsize(OUTPUT_FILE) / (1024 * 1024)
+    print(f"📁 File size: {size_mb:.2f} MB")
+
+if __name__ == "__main__":
+    consolidate_codebase()
+
+================================================================================
+### FILE: setup.py ###
+================================================================================
+
+from setuptools import setup, find_packages
+
+setup(
+    name="pylabcontrol",
+    version="2.0.0",
+    packages=find_packages(),
+    install_requires=[
+        "pyvisa",
+        "pint",
+        "toml",
+    ],
+)
+
+================================================================================
+### FILE: pylabcontrol\__init__.py ###
+================================================================================
+
+
+
+================================================================================
+### FILE: pylabcontrol\adapters\base_adapter.py ###
+================================================================================
+
+from abc import ABC, abstractmethod
+import logging
+from pylabcontrol.utils.logging_manager import LogTiers
+
+class BaseAdapter(ABC):
+    """
+    Abstract Base Class for all PyLabControl transport layers.
+    Every adapter must implement these primitives.
+    """
+    def __init__(self, address: str, instrument_id: str = None):
+        self.address = address
+        self.instrument_id = instrument_id or address
+        # All transport traffic goes here
+        self.logger = logging.getLogger(LogTiers.TRANSPORT)
+
+    @abstractmethod
+    def write(self, command: str):
+        """Send a string command to the hardware."""
+        pass
+
+    @abstractmethod
+    def read(self) -> str:
+        """Read a string response from the hardware."""
+        pass
+
+    @abstractmethod
+    def query(self, command: str) -> str:
+        """Atomic Write + Read operation."""
+        pass
+
+    @abstractmethod
+    def close(self):
+        """Cleanly release the hardware resource."""
+        pass
+
+================================================================================
+### FILE: pylabcontrol\adapters\mock_adapter.py ###
+================================================================================
+
+from .base_adapter import BaseAdapter
+
+class MockAdapter(BaseAdapter):
+    """
+    Simulation Adapter. Returns pre-defined responses 
+    to simulate physical hardware.
+    """
+    def __init__(self, address: str = "MOCK::ID", **kwargs):
+        super().__init__(address, **kwargs)
+        self.responses = {
+            "*IDN?": "PyLabControl, MockInstrument, V2-Alpha",
+            "*OPC?": "1"
+        }
+        self.last_written = None
+
+    def write(self, command: str):
+        self.last_written = command
+        # You could add logic here to update internal state (e.g. power on/off)
+
+    def read(self) -> str:
+        return self.responses.get(self.last_written, "MOCK_OK")
+
+    def query(self, command: str) -> str:
+        self.write(command)
+        return self.read()
+
+    def close(self):
+        pass
+
+================================================================================
+### FILE: pylabcontrol\adapters\tcp_adapter.py ###
+================================================================================
+
+import socket
+from .base_adapter import BaseAdapter
+
+class TCPAdapter(BaseAdapter):
+    """Adapter for raw TCP/IP Socket communication."""
+
+    def __init__(self, address: str, port: int = 5025, timeout: float = 5.0, **kwargs):
+        super().__init__(address, **kwargs)
+        self.port = port
+        self.timeout = timeout
+        self.sock = None
+        self._connect()
+
+    def _connect(self):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.settimeout(self.timeout)
+        self.sock.connect((self.address, self.port))
+
+    def write(self, command: str):
+        full_cmd = (command + '\n').encode('ascii')
+        self.sock.sendall(full_cmd)
+
+    def read(self) -> str:
+        return self.sock.recv(4096).decode('ascii').strip()
+
+    def query(self, command: str) -> str:
+        self.write(command)
+        return self.read()
+
+    def close(self):
+        if self.sock:
+            self.sock.close()
+
+================================================================================
+### FILE: pylabcontrol\adapters\visa_adapter.py ###
+================================================================================
+
+import pyvisa as visa
+from .base_adapter import BaseAdapter
+
+class VISAAdapter(BaseAdapter):
+    """
+    Adapter for VISA-compliant instruments (GPIB, USB-TMC, TCPIP::INSTR).
+    Refactored from the legacy ConnectionManager.
+    """
+    def __init__(self, address: str, timeout: int = 5000, term_chars: str = '\n', **kwargs):
+        super().__init__(address, **kwargs)
+        self.rm = visa.ResourceManager()
+        self.inst = self.rm.open_resource(address)
+        self.inst.timeout = timeout
+        self.inst.write_termination = term_chars
+        self.inst.read_termination = term_chars
+
+    def write(self, command: str):
+        self.inst.write(command)
+
+    def read(self) -> str:
+        return self.inst.read().strip()
+
+    def query(self, command: str) -> str:
+        return self.inst.query(command).strip()
+
+    def close(self):
+        self.inst.close()
+        self.rm.close()
+
+================================================================================
+### FILE: pylabcontrol\adapters\__init__.py ###
+================================================================================
+
+
+
+================================================================================
+### FILE: pylabcontrol\core\base_instrument.py ###
+================================================================================
+
+import pyvisa as visa
+from ..adapters.base_adapter import BaseAdapter
+from ..utils.unit_manager import um, u
+
+class BaseInstrument:
+    """
+    Tier 3: The Logic Core. 
+    Refactored to support Adapter Injection while maintaining full 
+    validation and IEEE 488.2 command sets. 
+    """
+    def __init__(self, adapter: BaseAdapter, config=None, logger=None, instrument_id=None):
+        self.adapter = adapter
+        self.config = config or {} # <--- Store the TOML data here
+        self.logger = logger
+        self.um = um  # Shared unit manager
+
+        # Build standardized ID and sync with adapter for shared context
+        self.instrument_id = instrument_id or self.build_instrument_id()
+        self.adapter.instrument_id = self.instrument_id
+
+    def build_instrument_id(self):
+        """Constructs a standard ID: <brand>_<model>_<class_name>"""
+        brand = getattr(self, "brand", "UnknownBrand")
+        model = getattr(self, "model", "UnknownModel")
+        class_name = self.__class__.__name__
+        return f"{brand}_{model}_{class_name}"
+
+    # --------------------------------------------------------------------------
+    # IEEE 488.2 Common Commands (Verbs) - Refactored for Adapter Tier
+    # --------------------------------------------------------------------------
+
+    def clear_status(self):
+        """*CLS - Clears status byte and error queue."""
+        self.adapter.write("*CLS")
+
+    def ese(self, data: int):
+        """*ESE <data> - Sets bits in standard event status enable register. [cite: 1081]"""
+        self.adapter.write(f"*ESE {data}")
+
+    def ese_query(self) -> str:
+        """*ESE? - Queries standard event status enable register. [cite: 1083]"""
+        return self.adapter.query("*ESE?")
+
+    def esr_query(self) -> str:
+        """*ESR? - Queries standard event status register. [cite: 1086]"""
+        return self.adapter.query("*ESR?")
+
+    def idn(self) -> str:
+        """*IDN? - Queries instrument identification string. [cite: 1089]"""
+        return self.adapter.query("*IDN?")
+
+    def opc(self):
+        """*OPC - Sets bit 0 in SESR when operations complete. [cite: 1091]"""
+        self.adapter.write("*OPC")
+
+    def opc_query(self) -> str:
+        """*OPC? - Queries if all operations are complete. [cite: 1093]"""
+        return self.adapter.query("*OPC?")
+
+    def opt_query(self) -> str:
+        """*OPT? - Queries installed options. [cite: 1095]"""
+        return self.adapter.query("*OPT?")
+
+    def psc(self, state: str):
+        """*PSC <0|1> - Controls power-on status clear. [cite: 1097]"""
+        self.adapter.write(f"*PSC {state}")
+
+    def psc_query(self) -> str:
+        """*PSC? - Queries power-on status clear setting. [cite: 1099]"""
+        return self.adapter.query("*PSC?")
+
+    def recall(self, filename: str):
+        """*RCL - Recalls configuration from file. [cite: 1101]"""
+        self.adapter.write(f'*RCL "{filename}"')
+
+    def reset(self):
+        """*RST - Resets instrument to factory defaults. [cite: 1103]"""
+        self.adapter.write("*RST")
+
+    def save(self, filename: str):
+        """*SAV - Saves current configuration to file. [cite: 1105]"""
+        self.adapter.write(f'*SAV "{filename}"')
+
+    def sre(self, data: int):
+        """*SRE <data> - Sets service request enable register. [cite: 1107]"""
+        self.adapter.write(f"*SRE {data}")
+
+    def sre_query(self) -> str:
+        """*SRE? - Queries service request enable register. [cite: 1109]"""
+        return self.adapter.query("*SRE?")
+
+    def stb_query(self) -> str:
+        """*STB? - Queries status byte. [cite: 1111]"""
+        return self.adapter.query("*STB?")
+
+    def trigger(self):
+        """*TRG - Triggers the instrument. [cite: 1114]"""
+        self.adapter.write("*TRG")
+
+    def self_test(self) -> str:
+        """*TST? - Runs self-test. [cite: 1116]"""
+        return self.adapter.query("*TST?")
+
+    def wait(self):
+        """*WAI - Waits for pending commands to complete. [cite: 1119]"""
+        self.adapter.write("*WAI")
+
+    def close(self):
+        """Cleanly releases adapter resources. [cite: 1021-1023]"""
+        self.adapter.close()
+
+================================================================================
+### FILE: pylabcontrol\core\descriptors.py ###
+================================================================================
+
+import logging
+from typing import Any, Optional, List, Union
+from pylabcontrol.utils.unit_manager import um, u
+from pylabcontrol.utils.logging_manager import LogTiers
+
+# Descriptors operate in the Validation tier to track logic translation
+log = logging.getLogger(LogTiers.VALIDATION)
+
+class InstrumentParameter:
+    """
+    Tier 2: Universal Descriptor for basic Instrument Settings (Nouns).
+    Handles mapping between class attributes and raw hardware communication.
+    """
+    def __init__(self, 
+                 scpi_set: Optional[str] = None, 
+                 scpi_get: Optional[str] = None, 
+                 allowed: Optional[List[str]] = None):
+        self.scpi_set = scpi_set
+        self.scpi_get = scpi_get
+        self.allowed = allowed
+        self.name: str = "" 
+
+    def __set_name__(self, owner, name: str):
+        self.name = name
+
+    def __get__(self, obj: Any, objtype=None) -> Any:
+        if obj is None:
+            return self
+        
+        if not self.scpi_get:
+            log.error(f"[{obj.instrument_id}] Attempted to read write-only parameter: {self.name}")
+            raise AttributeError(f"Parameter '{self.name}' is write-only.")
+        
+        raw_val = obj.adapter.query(self.scpi_get)
+        log.debug(f"[{obj.instrument_id}] READ {self.name}: raw='{raw_val}'")
+        return raw_val
+
+    def __set__(self, obj: Any, value: Any):
+        if not self.scpi_set:
+            log.error(f"[{obj.instrument_id}] Attempted to write read-only parameter: {self.name}")
+            raise AttributeError(f"Parameter '{self.name}' is read-only.")
+        
+        # Validation using BaseInstrument logic
+        if self.allowed:
+            value = obj.validate_state(value, self.allowed)
+        
+        log.info(f"[{obj.instrument_id}] SET {self.name} -> {value}")
+        command = f"{self.scpi_set} {value}"
+        obj.adapter.write(command)
+
+
+class MetricParameter(InstrumentParameter):
+    """
+    Tier 2: Unit-aware Descriptor.
+    Intercepts assignment to perform dimensional analysis and limit validation
+    before hardware dispatch.
+    """
+    def __init__(self, 
+                 scpi_set: Optional[str] = None, 
+                 scpi_get: Optional[str] = None, 
+                 unit: Optional[str] = None, 
+                 limits_key: Optional[str] = None):
+        super().__init__(scpi_set, scpi_get)
+        self.unit = unit
+        self.limits_key = limits_key
+
+    def __get__(self, obj: Any, objtype=None) -> Any:
+        if obj is None:
+            return self
+        
+        # Get raw string from hardware via parent InstrumentParameter
+        raw_val = super().__get__(obj)
+        
+        # Normalize to the default unit specified in the descriptor
+        quantity = um.normalise_unit_input(raw_val, self.unit, context=self.name)
+        log.debug(f"[{obj.instrument_id}] DECODE {self.name}: {raw_val} -> {quantity}")
+        return quantity
+
+    def __set__(self, obj: Any, value: Union[float, str, Any]):
+        # Retrieve limits from the instrument configuration map
+        limits = obj.config.get('limits', {}).get(self.limits_key, {})
+        min_val = limits.get('min')
+        max_val = limits.get('max')
+
+        # Trigger unit normalization and boundary validation via BaseInstrument
+        try:
+            normalized = obj.validate_level(
+                value, min_val, max_val, self.unit, context=self.name
+            )
+            
+            log.info(f"[{obj.instrument_id}] VALIDATE {self.name}: {value} -> {normalized}")
+            
+            # Format magnitude for SCPI (standardizing on float for precision)
+            val_to_send = normalized.magnitude 
+            command = f"{self.scpi_set} {val_to_send}"
+            obj.adapter.write(command)
+            
+        except ValueError as e:
+            log.error(f"[{obj.instrument_id}] VALIDATION FAILED for {self.name}: {str(e)}")
+            raise
+
+================================================================================
+### FILE: pylabcontrol\core\factory.py ###
+================================================================================
+
+import importlib
+import logging
+from ..adapters.visa_adapter import VISAAdapter
+from ..adapters.tcp_adapter import TCPAdapter
+
+logger = logging.getLogger("pylabcontrol.factory")
+
+def load_instrument(category, brand, model, address, **kwargs):
+    """
+    Orchestrates Phase 1 Initialization:
+    1. Selects Adapter.
+    2. Dynamically loads Driver.
+    3. Injects Adapter into Instrument.
+    """
+    # 1. Select Adapter based on address string
+    if "::" in address:
+        adapter = VISAAdapter(address)
+    else:
+        # Default to TCP if it looks like an IP, otherwise Serial
+        adapter = TCPAdapter(address) 
+
+    # 2. Dynamic Driver Discovery (Hierarchical Path)
+    # e.g., pylabcontrol.instruments.lasers.santec.TSL210
+    module_path = f"pylabcontrol.instruments.{category}.{brand.lower()}"
+    class_name = model.upper()
+
+    try:
+        module = importlib.import_module(module_path)
+        InstrumentClass = getattr(module, class_name)
+        
+        # 3. Inject and Return
+        return InstrumentClass(adapter=adapter, **kwargs)
+
+    except (ImportError, AttributeError) as e:
+        logger.error(f"Failed to load {brand} {model}: {e}")
+        raise
+
+================================================================================
+### FILE: pylabcontrol\core\__init__.py ###
+================================================================================
+
+
+
+================================================================================
+### FILE: pylabcontrol\instruments\lasers\santec.py ###
+================================================================================
+
+from ...core.base_instrument import BaseInstrument
+from ...core.descriptors import MetricParameter, InstrumentParameter
+
+class TSL210(BaseInstrument):
+    brand = "Santec"
+    model = "TSL210"
+
+    # --- Nouns (Descriptors) ---
+    wavelength = MetricParameter(
+        scpi_set="WA", scpi_get="WA?", unit="nm", limits_key="wavelength"
+    )
+    
+    power = MetricParameter(
+        scpi_set="LP", scpi_get="LP?", unit="dBm", limits_key="power"
+    )
+
+    output = InstrumentParameter(
+        scpi_set="LO", scpi_get="LO?", allowed=["ON", "OFF", "1", "0"]
+    )
+
+    # --- Verbs (Methods) ---
+    def auto_tune(self):
+        """A Verb: This is an action, not a state."""
+        self.adapter.write("AT")
+
+================================================================================
+### FILE: pylabcontrol\utils\config_loader.py ###
+================================================================================
+
+import os
+import toml
+
+class ConfigLoader:
+    """
+    V2 ConfigLoader: Decoupled from the instruments source tree.
+    Focuses on retrieving hardware maps from the root /configs directory.
+    """
+    # Point to the root configs folder, not the source code
+    CONFIG_ROOT = os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "configs")
+
+    @staticmethod
+    def load_config(category: str, model: str) -> dict:
+        """
+        Loads a TOML config from the hierarchical /configs directory.
+        Path: configs/<category>/<model>.toml
+        """
+        config_path = os.path.join(ConfigLoader.CONFIG_ROOT, category.lower(), f"{model.lower()}.toml")
+
+        if not os.path.exists(config_path):
+            raise FileNotFoundError(f"Hardware config not found: {config_path}")
+
+        try:
+            config = toml.load(config_path)
+        except toml.TomlDecodeError as e:
+            raise ValueError(f"TOML Syntax Error in {model}: {e}")
+
+        # V2 Mandatory Sections
+        required_sections = ['scpi_commands', 'limits', 'defaults', 'validation']
+        for section in required_sections:
+            if section not in config:
+                raise ValueError(f"Missing mandatory section [{section}] in {model}.toml")
+
+        return config
+
+    @staticmethod
+    def format_command(template: str, **kwargs) -> str:
+        """Simple helper to fill {val} or {ch} placeholders."""
+        try:
+            return template.format(**kwargs)
+        except KeyError as e:
+            raise ValueError(f"Missing expected SCPI parameter: {e}")
+
+================================================================================
+### FILE: pylabcontrol\utils\decorators.py ###
+================================================================================
+
+import functools
+import logging
+import time
+from pylabcontrol.utils.logging_manager import LogTiers
+
+logger = logging.getLogger(LogTiers.ACTION)
+
+def instrument_logger(func):
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs):
+        start_time = time.perf_counter()
+        try:
+            result = func(self, *args, **kwargs)
+            duration = (time.perf_counter() - start_time) * 1000
+            logger.info(
+                f"[{self.instrument_id}] {func.__name__} executed in {duration:.2f}ms",
+                extra={"inst_id": self.instrument_id}
+            )
+            return result
+        except Exception as e:
+            logger.error(f"[{self.instrument_id}] {func.__name__} FAILED: {str(e)}")
+            raise
+    return wrapper
+
+================================================================================
+### FILE: pylabcontrol\utils\logging_manager.py ###
+================================================================================
+
+import logging
+import queue
+from logging.handlers import QueueHandler
+
+class LogTiers:
+    """Standardized tiers for PyLabControl logging."""
+    TRANSPORT = "pylabcontrol.transport"   # Raw SCPI/Adapter traffic
+    VALIDATION = "pylabcontrol.validation" # Descriptor/Unit logic
+    ACTION = "pylabcontrol.action"       # High-level instrument methods
+
+class GUILogHandler(logging.Handler):
+    """
+    Thread-safe handler that pushes logs into a Queue.
+    The GUI will poll this queue to update its display.
+    """
+    def __init__(self, log_queue: queue.Queue):
+        super().__init__()
+        self.log_queue = log_queue
+
+    def emit(self, record):
+        # We store the record as a dict for easy GUI parsing
+        self.log_queue.put({
+            "time": self.formatTime(record),
+            "level": record.levelname,
+            "tier": record.name,
+            "msg": record.getMessage(),
+            "inst_id": getattr(record, "inst_id", "System")
+        })
+
+def setup_logging(level=logging.DEBUG, log_file="pylabcontrol.log"):
+    """Initializes the hierarchical logging system."""
+    formatter = logging.Formatter('%(asctime)s | %(name)-20s | %(levelname)-8s | %(message)s')
+    
+    # Root Logger
+    root = logging.getLogger("pylabcontrol")
+    root.setLevel(level)
+
+    # File Handler
+    fh = logging.FileHandler(log_file)
+    fh.setFormatter(formatter)
+    root.addHandler(fh)
+
+    # Stream Handler (Console)
+    sh = logging.StreamHandler()
+    sh.setFormatter(formatter)
+    root.addHandler(sh)
+
+    return root
+
+================================================================================
+### FILE: pylabcontrol\utils\unit_manager.py ###
+================================================================================
+
+import pint
+from typing import Union
+
+class UnitManager:
+    """
+    The Single Source of Truth for all dimensional analysis.
+    Wraps the 'pint' library for PyLabControl.
+    """
+    def __init__(self):
+        self.u = pint.UnitRegistry()
+        # Define common lab aliases if needed
+        self.u.define('micro_watt = 1e-6 * watt = uW')
+        self.u.define('nano_meter = 1e-9 * meter = nm')
+
+    def normalise_unit_input(self, value: Union[float, int, str, pint.Quantity], 
+                             target_unit: str, context: str = "") -> pint.Quantity:
+        """
+        Converts any input (string with unit, float, or Quantity) 
+        into a standardized pint.Quantity in the target unit.
+        """
+        try:
+            if isinstance(value, (int, float)):
+                # Assume raw numbers are already in target units if not specified
+                quantity = value * self.u(target_unit)
+            elif isinstance(value, str):
+                quantity = self.u(value)
+            else:
+                quantity = value
+
+            # Convert to target unit (e.g., from '1550nm' to '1.55um' if requested)
+            return quantity.to(target_unit)
+        
+        except Exception as e:
+            raise ValueError(f"Unit conversion error in {context}: {e}")
+
+# Global singleton instances
+um = UnitManager()
+u = um.u
+
+================================================================================
+### FILE: pylabcontrol\utils\__init__.py ###
+================================================================================
+
+
+
+================================================================================
+### FILE: scripts\phase1_check.py ###
+================================================================================
+
+from pylabcontrol.core.factory import load_instrument
+from pylabcontrol.adapters.mock_adapter import MockAdapter
+from pylabcontrol.core.base_instrument import BaseInstrument
+
+# 1. Create a Mock Adapter
+mock_dev = MockAdapter(address="GPIB::1")
+
+# 2. Injected Load (Assuming you have a 'laser' folder in 'instruments' and a TOML)
+# For this test, we can even instantiate the BaseInstrument directly
+
+instr = BaseInstrument(adapter=mock_dev)
+
+print(f"Testing IDN: {instr.idn()}")
+instr.reset()
+print("Phase 1: Connectivity, Unit Management, and Adapter Injection Verified.")

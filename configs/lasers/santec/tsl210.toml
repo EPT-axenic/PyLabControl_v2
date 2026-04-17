@@ -1,0 +1,31 @@
+# --- Identity ---
+brand = "Santec"
+model = "TSL210"
+version = "1.0"
+
+# --- SCPI Overrides ---
+[scpi_commands]
+set_wavelength = "WA"
+get_wavelength = "WA?"
+set_power = "LP"
+get_power = "LP?"
+set_output_status = "LO"
+get_output_status = "LO?"
+
+# --- Boundaries ---
+[limits.wavelength]
+min = 1260.0
+max = 1630.0
+unit = "nm"
+
+[limits.power]
+min = -10.0
+max = 13.0
+unit = "dBm"
+
+# --- Mandatory Sections for V2 Standard ---
+[validation]
+# Empty for now, but the header MUST exist if not using defaults in Pydantic
+
+[defaults]
+# Empty for now
