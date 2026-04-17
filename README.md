@@ -84,7 +84,7 @@ pip install -e .
 
 ## 2. Standardized Initialization
 ```
-from pylabcontrol.core.factory import load_instrument
+from pylabcontrol_v2.core.factory import load_instrument
 
 # The Factory handles config loading, adapter selection, and driver injection
 

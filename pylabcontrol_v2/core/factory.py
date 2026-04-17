@@ -5,7 +5,7 @@ from pylabcontrol_v2.adapters.visa_adapter import VISAAdapter
 from pylabcontrol_v2.adapters.tcp_adapter import TCPAdapter
 from pylabcontrol_v2.adapters.mock_adapter import MockAdapter
 
-logger = logging.getLogger("pylabcontrol.factory")
+logger = logging.getLogger("pylabcontrol_v2.factory")
 
 def load_instrument(category, brand, model, address, **kwargs):
     """
@@ -23,7 +23,7 @@ def load_instrument(category, brand, model, address, **kwargs):
         adapter = TCPAdapter(address)
 
     # 3. Dynamic Driver Discovery
-    module_path = f"pylabcontrol.instruments.{category}.{brand.lower()}"
+    module_path = f"pylabcontrol_v2.instruments.{category}.{brand.lower()}"
     class_name = model.upper()
 
     try:
@@ -31,7 +31,7 @@ def load_instrument(category, brand, model, address, **kwargs):
         InstrumentClass = getattr(module, class_name)
         
         # 4. Inject Config + Adapter into the Instrument 
-        return InstrumentClass(adapter=adapter, config=config, **kwargs)
+        return InstrumentClass(config, adapter, **kwargs)
 
     except (ImportError, AttributeError) as e:
         logger.error(f"Failed to load driver for {brand} {model}: {e}")

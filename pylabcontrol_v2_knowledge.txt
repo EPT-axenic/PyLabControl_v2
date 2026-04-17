@@ -85,7 +85,7 @@ setup(
 
 from abc import ABC, abstractmethod
 import logging
-from pylabcontrol.utils.logging_manager import LogTiers
+from pylabcontrol_v2.utils.logging_manager import LogTiers
 
 class BaseAdapter(ABC):
     """
@@ -348,8 +348,8 @@ class BaseInstrument:
 
 import logging
 from typing import Any, Optional, List, Union
-from pylabcontrol.utils.unit_manager import um, u
-from pylabcontrol.utils.logging_manager import LogTiers
+from pylabcontrol_v2.utils.unit_manager import um, u
+from pylabcontrol_v2.utils.logging_manager import LogTiers
 
 # Descriptors operate in the Validation tier to track logic translation
 log = logging.getLogger(LogTiers.VALIDATION)
@@ -456,7 +456,7 @@ import logging
 from ..adapters.visa_adapter import VISAAdapter
 from ..adapters.tcp_adapter import TCPAdapter
 
-logger = logging.getLogger("pylabcontrol.factory")
+logger = logging.getLogger("pylabcontrol_v2.factory")
 
 def load_instrument(category, brand, model, address, **kwargs):
     """
@@ -473,8 +473,8 @@ def load_instrument(category, brand, model, address, **kwargs):
         adapter = TCPAdapter(address) 
 
     # 2. Dynamic Driver Discovery (Hierarchical Path)
-    # e.g., pylabcontrol.instruments.lasers.santec.TSL210
-    module_path = f"pylabcontrol.instruments.{category}.{brand.lower()}"
+    # e.g., pylabcontrol_v2.instruments.lasers.santec.TSL210
+    module_path = f"pylabcontrol_v2.instruments.{category}.{brand.lower()}"
     class_name = model.upper()
 
     try:
@@ -577,7 +577,7 @@ class ConfigLoader:
 import functools
 import logging
 import time
-from pylabcontrol.utils.logging_manager import LogTiers
+from pylabcontrol_v2.utils.logging_manager import LogTiers
 
 logger = logging.getLogger(LogTiers.ACTION)
 
@@ -608,9 +608,9 @@ from logging.handlers import QueueHandler
 
 class LogTiers:
     """Standardized tiers for PyLabControl logging."""
-    TRANSPORT = "pylabcontrol.transport"   # Raw SCPI/Adapter traffic
-    VALIDATION = "pylabcontrol.validation" # Descriptor/Unit logic
-    ACTION = "pylabcontrol.action"       # High-level instrument methods
+    TRANSPORT = "pylabcontrol_v2.transport"   # Raw SCPI/Adapter traffic
+    VALIDATION = "pylabcontrol_v2.validation" # Descriptor/Unit logic
+    ACTION = "pylabcontrol_v2.action"       # High-level instrument methods
 
 class GUILogHandler(logging.Handler):
     """
@@ -631,7 +631,7 @@ class GUILogHandler(logging.Handler):
             "inst_id": getattr(record, "inst_id", "System")
         })
 
-def setup_logging(level=logging.DEBUG, log_file="pylabcontrol.log"):
+def setup_logging(level=logging.DEBUG, log_file="pylabcontrol_v2.log"):
     """Initializes the hierarchical logging system."""
     formatter = logging.Formatter('%(asctime)s | %(name)-20s | %(levelname)-8s | %(message)s')
     
@@ -661,7 +661,7 @@ from typing import Union
 class UnitManager:
     """
     The Single Source of Truth for all dimensional analysis.
-    Wraps the 'pint' library for PyLabControl.
+    Wraps the 'pint' library for pylabcontrol_v2.
     """
     def __init__(self):
         self.u = pint.UnitRegistry()
@@ -704,9 +704,9 @@ u = um.u
 ### FILE: scripts\phase1_check.py ###
 ================================================================================
 
-from pylabcontrol.core.factory import load_instrument
-from pylabcontrol.adapters.mock_adapter import MockAdapter
-from pylabcontrol.core.base_instrument import BaseInstrument
+from pylabcontrol_v2.core.factory import load_instrument
+from pylabcontrol_v2.adapters.mock_adapter import MockAdapter
+from pylabcontrol_v2.core.base_instrument import BaseInstrument
 
 # 1. Create a Mock Adapter
 mock_dev = MockAdapter(address="GPIB::1")

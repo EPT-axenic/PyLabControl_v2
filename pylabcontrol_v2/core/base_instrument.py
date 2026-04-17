@@ -1,31 +1,56 @@
-import pyvisa as visa
-from ..adapters.base_adapter import BaseAdapter
+import logging
+from typing import Optional, List, Any
 from pylabcontrol_v2.core.models import InstrumentConfig
-from ..utils.unit_manager import um, u
-
+from pylabcontrol_v2.adapters.base_adapter import BaseAdapter
+from pylabcontrol_v2.utils.unit_manager import um
 
 class BaseInstrument:
     """
-    Tier 3: The Logic Core. 
-    Refactored to support Adapter Injection while maintaining full 
-    validation and IEEE 488.2 command sets. 
+    Tier 3: The Logic Core.
+    Handles the bridge between high-level properties and low-level adapter traffic.
     """
-    def __init__(self, adapter: BaseAdapter, config: InstrumentConfig, logger=None, instrument_id=None):
-        self.adapter = adapter
+    def __init__(self, config: InstrumentConfig, adapter: BaseAdapter):
         self.config = config
-        self.logger = logger
-        self.um = um  # Shared unit manager
+        self.adapter = adapter
+        
+        # Consistent naming: Use 'self.log' everywhere
+        self.log = logging.getLogger(f"pylabcontrol_v2.{self.config.model.lower()}")
+        
+        # Build the ID once from the config
+        self.instrument_id = f"{self.config.brand}_{self.config.model}"
 
-        # Build standardized ID and sync with adapter for shared context
-        self.instrument_id = instrument_id or self.build_instrument_id()
-        self.adapter.instrument_id = self.instrument_id
+    # --------------------------------------------------------------------------
+    # VALIDATIONS (The Bouncers)
+    # --------------------------------------------------------------------------
 
-    def build_instrument_id(self):
-        """Constructs a standard ID: <brand>_<model>_<class_name>"""
-        brand = getattr(self, "brand", "UnknownBrand")
-        model = getattr(self, "model", "UnknownModel")
-        class_name = self.__class__.__name__
-        return f"{brand}_{model}_{class_name}"
+    def validate_state(self, value: Any, allowed_list: List[str], context: str = "") -> str:
+        """Validates string states (e.g., 'ON', 'OFF') against TOML or Descriptor lists."""
+        val_str = str(value).upper()
+        upper_allowed = [str(a).upper() for a in allowed_list]
+
+        if val_str not in upper_allowed:
+            self.log.error(f"[{self.instrument_id}] INVALID STATE: '{value}' for {context}")
+            raise ValueError(f"Invalid state '{value}' for {context}. Allowed: {allowed_list}")
+        
+        return val_str
+
+    def validate_level(self, value: Any, target_unit: str, context: Optional[str] = None):
+        """Validates numeric levels against TOML limits using Pint."""
+        # Normalize input to a Pint Quantity
+        qty = um.normalise_unit_input(value, target_unit, context=context)
+
+        # Check limits if they exist in the Pydantic config
+        if context and hasattr(self.config.limits, context):
+            limit_cfg = getattr(self.config.limits, context)
+            val_num = qty.magnitude
+
+            if val_num < limit_cfg.min or val_num > limit_cfg.max:
+                self.log.error(f"[{self.instrument_id}] LIMIT BREACH: {qty} is outside {context} range")
+                raise ValueError(
+                    f"Out of bounds: {qty} for {context}. "
+                    f"Range: [{limit_cfg.min}, {limit_cfg.max}] {limit_cfg.unit}"
+                )
+        return qty
 
     # --------------------------------------------------------------------------
     # IEEE 488.2 Common Commands (Verbs) - Refactored for Adapter Tier

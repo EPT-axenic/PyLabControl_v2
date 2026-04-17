@@ -1,18 +1,18 @@
-# --- Identity ---
 brand = "Santec"
 model = "TSL210"
-version = "1.0"
+version = "2.0.0"
 
-# --- SCPI Overrides ---
 [scpi_commands]
+idn = "ID?"
 set_wavelength = "WA"
 get_wavelength = "WA?"
-set_power = "LP"
-get_power = "LP?"
-set_output_status = "LO"
-get_output_status = "LO?"
+set_power = "OP"
+get_power = "OP?"
+set_output_on = "LO"
+set_output_off = "LF"
+get_output_status = "SU"
 
-# --- Boundaries ---
+[limits]
 [limits.wavelength]
 min = 1260.0
 max = 1630.0
