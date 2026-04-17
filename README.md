@@ -1,6 +1,6 @@
 # PyLabControl V2: The Bedrock Framework
 PyLabControl V2 is a professional-grade lab automation framework designed to decouple high-level instrument logic from low-level hardware communication. By utilizing Python Descriptors, Pydantic models, and a hierarchical configuration system, V2 eliminates boilerplate code and ensures "Hardware Agnostic" automation.
-<br>
+
 
 # 🏗 The 3-Tier Architecture
 
@@ -10,7 +10,6 @@ The framework is organized into three distinct layers to ensure that changing a 
 * **Tier 2: Descriptors (The "Nouns")**: Handles state management. This layer intercepts property access to perform unit conversion, limit checking, and SCPI mapping.
 
 * **Tier 3: Logic Core (The "Verbs")**: Standardizes instrument behavior. It provides a consistent set of commands for common operations across all supported hardware.
-<br>
 
 
 # 📂 Project Structure
@@ -29,7 +28,7 @@ PyLabControl_v2/
 ├── scripts/                    # Verification and Test Scripts
 └── setup.py                    # Package installation for 'pip install -e .
 ```
-<br>
+
 
 # 🛠 Script-by-Script Breakdown
 
@@ -59,7 +58,7 @@ PyLabControl_v2/
 * `logging_manager.py`: A hierarchical logging system that categorizes system traffic into Transport, Validation, and Action tiers.
 
 * `decorators.py`: Contains the `instrument_logger` which captures execution time and handles error logging for high-level instrument methods.
-<br>
+
 
 # 🚀 How the Code Works:
 
@@ -74,7 +73,7 @@ When you execute `laser.wavelength = "1550nm"` in a script, the following sequen
 4. **Translation**: The descriptor looks up the specific SCPI command for "set_wavelength" in the TOML (e.g., finding `"WA"` for a Santec laser).
 
 5. **Dispatch**: The `Adapter` sends the final formatted string (e.g., `WA 1550.0`) to the physical hardware.
-<br>
+
 
 # 🔧 Installation & Usage
 ## 1. Install as an Editable Package
