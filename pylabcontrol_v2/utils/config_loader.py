@@ -1,6 +1,6 @@
 import os
 import toml
-from pylabcontrol.core.models import InstrumentConfig
+from pylabcontrol_v2.core.models import InstrumentConfig
 
 class ConfigLoader:
     """

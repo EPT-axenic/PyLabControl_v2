@@ -1,4 +1,4 @@
-from pylabcontrol.instruments.lasers import TLS
+from pylabcontrol_v2.instruments.lasers import TLS
 
 class TSL210(TLS):
     """Santec TSL-210 Tunable Laser Driver."""

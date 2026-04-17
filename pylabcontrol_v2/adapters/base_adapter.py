@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import logging
-from pylabcontrol.utils.logging_manager import LogTiers
+from pylabcontrol_v2.utils.logging_manager import LogTiers
 
 class BaseAdapter(ABC):
     """

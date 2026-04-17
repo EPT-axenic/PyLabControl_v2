@@ -1,7 +1,7 @@
 import functools
 import logging
 import time
-from pylabcontrol.utils.logging_manager import LogTiers
+from pylabcontrol_v2.utils.logging_manager import LogTiers
 
 logger = logging.getLogger(LogTiers.ACTION)
 

@@ -1,6 +1,6 @@
 import pyvisa as visa
 from ..adapters.base_adapter import BaseAdapter
-from pylabcontrol.core.models import InstrumentConfig
+from pylabcontrol_v2.core.models import InstrumentConfig
 from ..utils.unit_manager import um, u
 
 

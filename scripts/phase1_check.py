@@ -1,6 +1,6 @@
-from pylabcontrol.core.factory import load_instrument
-from pylabcontrol.adapters.mock_adapter import MockAdapter
-from pylabcontrol.core.base_instrument import BaseInstrument
+from pylabcontrol_v2.core.factory import load_instrument
+from pylabcontrol_v2.adapters.mock_adapter import MockAdapter
+from pylabcontrol_v2.core.base_instrument import BaseInstrument
 
 # 1. Create a Mock Adapter
 mock_dev = MockAdapter(address="GPIB::1")

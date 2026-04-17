@@ -1,5 +1,5 @@
-from pylabcontrol.core.base_instrument import BaseInstrument
-from pylabcontrol.core.descriptors import MetricParameter, InstrumentParameter
+from pylabcontrol_v2.core.base_instrument import BaseInstrument
+from pylabcontrol_v2.core.descriptors import MetricParameter, InstrumentParameter
 
 class TLS(BaseInstrument):
     """

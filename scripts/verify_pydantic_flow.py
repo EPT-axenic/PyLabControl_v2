@@ -1,7 +1,7 @@
-from pylabcontrol.utils.config_loader import ConfigLoader
-from pylabcontrol.adapters.mock_adapter import MockAdapter
-from pylabcontrol.core.base_instrument import BaseInstrument
-from pylabcontrol.utils.logging_manager import setup_logging
+from pylabcontrol_v2.utils.config_loader import ConfigLoader
+from pylabcontrol_v2.adapters.mock_adapter import MockAdapter
+from pylabcontrol_v2.core.base_instrument import BaseInstrument
+from pylabcontrol_v2.utils.logging_manager import setup_logging
 
 setup_logging()
 

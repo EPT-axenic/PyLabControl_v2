@@ -1,7 +1,7 @@
 import logging
 import time
-from pylabcontrol.core.factory import load_instrument
-from pylabcontrol.utils.logging_manager import setup_logging, LogTiers
+from pylabcontrol_v2.core.factory import load_instrument
+from pylabcontrol_v2.utils.logging_manager import setup_logging, LogTiers
 
 # 1. Initialize hierarchical logging
 setup_logging(level=logging.DEBUG)

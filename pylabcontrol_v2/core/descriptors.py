@@ -1,7 +1,7 @@
 import logging
 from typing import Any, Optional, List, Union
-from pylabcontrol.utils.unit_manager import um, u
-from pylabcontrol.utils.logging_manager import LogTiers
+from pylabcontrol_v2.utils.unit_manager import um, u
+from pylabcontrol_v2.utils.logging_manager import LogTiers
 
 # Descriptors operate in the Validation tier to track logic translation
 log = logging.getLogger(LogTiers.VALIDATION)

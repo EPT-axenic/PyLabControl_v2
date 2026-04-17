@@ -1,9 +1,9 @@
 import importlib
 import logging
-from pylabcontrol.utils.config_loader import ConfigLoader
-from pylabcontrol.adapters.visa_adapter import VISAAdapter
-from pylabcontrol.adapters.tcp_adapter import TCPAdapter
-from pylabcontrol.adapters.mock_adapter import MockAdapter
+from pylabcontrol_v2.utils.config_loader import ConfigLoader
+from pylabcontrol_v2.adapters.visa_adapter import VISAAdapter
+from pylabcontrol_v2.adapters.tcp_adapter import TCPAdapter
+from pylabcontrol_v2.adapters.mock_adapter import MockAdapter
 
 logger = logging.getLogger("pylabcontrol.factory")
 
