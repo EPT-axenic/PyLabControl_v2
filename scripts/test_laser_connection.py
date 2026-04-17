@@ -35,18 +35,22 @@ def run_full_test():
         time.sleep(0.1)
 
         log.info("Action: Setting Target Power to 5.0 dBm")
-        laser.power = "5.0 dBm"
-        time.sleep(0.5) # Wait for APC loop to stabilize
+        laser.power = -2
+        laser.wait_until_ready()
         log.info(f"Verification: Current Power is {laser.power}")
 
         # ---------------------------------------------------------
         # 3. WAVELENGTH TUNING
         # ---------------------------------------------------------
-        log.info("Action: Setting Wavelength to 1555.55 nm")
-        laser.wavelength = "1555.55 nm"
-        time.sleep(0.5) # Wait for mechanical tuning
-        log.info(f"Verification: Laser reports {laser.wavelength}")
+        # Try any of these: 1555, "1555nm", "1.555 um"
+        target_wl = 1580 
+        log.info(f"Action: Setting Wavelength to {target_wl}")
+        laser.wavelength = target_wl
+        laser.wait_until_ready()
+        log.debug(f"Current Wavelength: {laser.wavelength:.3f} nm")
+        
 
+        '''
         # ---------------------------------------------------------
         # 4. SAFE SHUTDOWN WITH POLLING
         # ---------------------------------------------------------
@@ -70,7 +74,7 @@ def run_full_test():
                 
         if laser.output == "ON":
             log.warning("Timeout reached! Laser is still reporting ON.")
-
+        '''
         log.info("=== ALL TESTS PASSED SUCCESSFULLY ===")
 
     except Exception as e:

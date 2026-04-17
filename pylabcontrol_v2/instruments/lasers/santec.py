@@ -1,85 +1,96 @@
 import re
+import time
 from pylabcontrol_v2.instruments.lasers import TLS
-from pylabcontrol_v2.utils.unit_manager import u
 
 class TSL210(TLS):
     def __init__(self, config, adapter):
         super().__init__(config, adapter)
-        
-        # Reaching into your VISAAdapter's 'inst' attribute
-        # TSL-210 legacy requires CRLF (\r\n) to process commands correctly
         self.adapter.inst.read_termination = '\r\n'
         self.adapter.inst.write_termination = '\r\n'
         
-        # Handshake: Silence headers so we get raw numbers
-        self.adapter.write("SU0") # Status off
-        self.adapter.write("HD0") # Header off
+        self.adapter.write("SU0")
+        self.adapter.write("HD0")
         
-        self.log.info(f"[{self.instrument_id}] TSL-210 Legacy Handshake Complete (CRLF + SU0/HD0)")
+        # Internal trackers for the generic wait method
+        self._target_wl = None
+        self._target_pwr = None
+        self._target_output = None
+
+    def wait_until_ready(self, timeout=15.0, tolerance_nm=0.005, tolerance_db=0.05):
+        """
+        Generic handshake: Checks all parameters against their last set targets.
+        Returns True when settled, False on timeout.
+        """
+        start_time = time.time()
+        self.log.info(f"[{self.instrument_id}] Waiting for hardware to settle...")
+
+        while (time.time() - start_time) < timeout:
+            # Check 1: Wavelength (Mechanical)
+            if self._target_wl is not None:
+                current_wl = self.wavelength.magnitude
+                if abs(current_wl - self._target_wl) > tolerance_nm:
+                    time.sleep(0.2)
+                    continue
+
+            # Check 2: Power (APC Loop)
+            if self._target_pwr is not None:
+                current_pwr = self.power.magnitude
+                if abs(current_pwr - self._target_pwr) > tolerance_db:
+                    time.sleep(0.1)
+                    continue
+
+            # Check 3: Output (Relay/Protection Circuit)
+            if self._target_output is not None:
+                if self.output != self._target_output:
+                    time.sleep(0.2)
+                    continue
+
+            # If we reach here, all set targets are matched
+            self.log.info(f"[{self.instrument_id}] Hardware READY.")
+            return True
+
+        self.log.warning(f"[{self.instrument_id}] Wait timed out!")
+        return False
+
+    # --- Properties with Target Tracking ---
+
+    @property
+    def wavelength(self):
+        res = self.adapter.query(self.config.scpi_commands.get("get_wavelength"))
+        return self.validate_level(self._clean_response(res), "nm", context="wavelength")
+
+    @wavelength.setter
+    def wavelength(self, value):
+        qty = self.validate_level(value, "nm", context="wavelength")
+        self._target_wl = qty.magnitude # Store intent
+        self.adapter.write(f"WA {self._target_wl:.3f}")
+
+    @property
+    def power(self):
+        res = self.adapter.query(self.config.scpi_commands.get("get_power"))
+        return self.validate_level(self._clean_response(res), "dBm", context="power")
+
+    @power.setter
+    def power(self, value):
+        qty = self.validate_level(value, "dBm", context="power")
+        self._target_pwr = qty.magnitude # Store intent
+        self.adapter.write("AF") 
+        self.adapter.write(f"OP {self._target_pwr:.2f}")
+
+    @property
+    def output(self):
+        res = self.adapter.query("SU").strip()
+        return "ON" if res.startswith("-") else "OFF"
+
+    @output.setter
+    def output(self, value):
+        state = self.validate_state(value, ["ON", "OFF"], context="output")
+        self._target_output = state # Store intent
+        cmd = "LO" if state == "ON" else "LF"
+        self.adapter.write(cmd)
 
     def _clean_response(self, raw_res):
         clean = re.sub(r'[^0-9.\-]', '', raw_res)
         if clean.count('.') > 1:
             return clean.split('.')[-1]
         return clean
-    
-    # --- Operating Mode (APC vs ACC) ---
-    @property
-    def control_mode(self):
-        """Reads the 4th digit of the SU status string to determine mode."""
-        res = self.adapter.query("SU").strip()
-        # Ensure the string is long enough to check the 4th digit
-        if len(res) >= 5:
-            # Format is usually -000000. 4th digit from the right (index 3 if we drop the sign)
-            # Manual Pg 65: 4th digit '1' indicates ACC mode. [cite: 1243]
-            digits = res.replace("-", "")
-            if len(digits) == 6 and digits[2] == '1':
-                return "ACC"
-        return "APC"
-
-    @control_mode.setter
-    def control_mode(self, mode):
-        mode = self.validate_state(mode, ["APC", "ACC"], context="control_mode")
-        # Manual Pg 62: AO = ACC mode, AF = APC mode [cite: 1176]
-        cmd = "AO" if mode == "ACC" else "AF"
-        self.adapter.write(cmd)
-
-    @property
-    def wavelength(self):
-        cmd = self.config.scpi_commands.get("get_wavelength")
-        res = self.adapter.query(cmd)
-        val = self._clean_response(res)
-        return self.validate_level(val, "nm", context="wavelength")
-
-    @wavelength.setter
-    def wavelength(self, value):
-        qty = self.validate_level(value, "nm", context="wavelength")
-        cmd = self.config.scpi_commands.get("set_wavelength")
-        self.adapter.write(f"{cmd}{qty.magnitude:.3f}")
-
-    @property
-    def power(self):
-        cmd = self.config.scpi_commands.get("get_power")
-        res = self.adapter.query(cmd)
-        val = self._clean_response(res)
-        return self.validate_level(val, "dBm", context="power")
-
-    @power.setter
-    def power(self, value):
-        qty = self.validate_level(value, "dBm", context="power")
-        cmd = self.config.scpi_commands.get("set_power")
-        # Force APC mode, then send power command with a space
-        self.adapter.write("AF") 
-        self.adapter.write(f"{cmd} {qty.magnitude:.2f}")
-
-    @property
-    def output(self):
-        res = self.adapter.query("SU").strip()
-        self.log.debug(f"[{self.instrument_id}] Raw SU response: '{res}'")
-        return "ON" if res.startswith("-") else "OFF"
-
-    @output.setter
-    def output(self, value):
-        state = self.validate_state(value, ["ON", "OFF"], context="output")
-        cmd = "LO" if state == "ON" else "LF"
-        self.adapter.write(cmd)
