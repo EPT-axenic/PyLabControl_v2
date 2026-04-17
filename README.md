@@ -1,7 +1,6 @@
 # PyLabControl V2: The Bedrock Framework
 PyLabControl V2 is a professional-grade lab automation framework designed to decouple high-level instrument logic from low-level hardware communication. By utilizing Python Descriptors, Pydantic models, and a hierarchical configuration system, V2 eliminates boilerplate code and ensures "Hardware Agnostic" automation.
 <br>
-<br>
 
 # 🏗 The 3-Tier Architecture
 
@@ -12,7 +11,7 @@ The framework is organized into three distinct layers to ensure that changing a 
 
 * **Tier 3: Logic Core (The "Verbs")**: Standardizes instrument behavior. It provides a consistent set of commands for common operations across all supported hardware.
 <br>
-<br>
+
 
 # 📂 Project Structure
 
@@ -30,7 +29,6 @@ PyLabControl_v2/
 ├── scripts/                    # Verification and Test Scripts
 └── setup.py                    # Package installation for 'pip install -e .
 ```
-<br>
 <br>
 
 # 🛠 Script-by-Script Breakdown
@@ -61,8 +59,6 @@ PyLabControl_v2/
 * `logging_manager.py`: A hierarchical logging system that categorizes system traffic into Transport, Validation, and Action tiers.
 
 * `decorators.py`: Contains the `instrument_logger` which captures execution time and handles error logging for high-level instrument methods.
-
-<br>
 <br>
 
 # 🚀 How the Code Works:
@@ -70,12 +66,14 @@ PyLabControl_v2/
 When you execute `laser.wavelength = "1550nm"` in a script, the following sequence occurs:
 
 1. **Validation**: `MetricParameter.__set__` retrieves the `InstrumentConfig` for the specific device.
-2. **Safety Check**: It compares the input against the `min` and `max` values defined in the instrument's TOML file.
-3. **Normalization**: The `UnitManager` ensures the value is converted to the instrument's preferred base unit (e.g., nanometers).
-4. **Translation**: The descriptor looks up the specific SCPI command for "set_wavelength" in the TOML (e.g., finding `"WA"` for a Santec laser).
-5. **Dispatch**: The `Adapter` sends the final formatted string (e.g., `WA 1550.0`) to the physical hardware.
 
-<br>
+2. **Safety Check**: It compares the input against the `min` and `max` values defined in the instrument's TOML file.
+
+3. **Normalization**: The `UnitManager` ensures the value is converted to the instrument's preferred base unit (e.g., nanometers).
+
+4. **Translation**: The descriptor looks up the specific SCPI command for "set_wavelength" in the TOML (e.g., finding `"WA"` for a Santec laser).
+
+5. **Dispatch**: The `Adapter` sends the final formatted string (e.g., `WA 1550.0`) to the physical hardware.
 <br>
 
 # 🔧 Installation & Usage
