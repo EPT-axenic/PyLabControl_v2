@@ -1,0 +1,104 @@
+# ==============================================================================
+# PYLABCONTROL V2 - TUNABLE LASER SOURCE (TLS) MASTER TEMPLATE
+# ==============================================================================
+# Description: Universal configuration schema for Tunable Lasers.
+# Compatibility: Supports Standalone, Modular, and Multi-Channel topologies.
+# ==============================================================================
+
+brand = "TEMPLATE_VENDOR"
+model = "GENERIC_TLS"
+version = "2.1.0"
+
+[scpi_commands]
+# ------------------------------------------------------------------------------
+# IEEE 488.2 STANDARD OVERRIDES
+# ------------------------------------------------------------------------------
+# Framework falls back to defaults (*RST, *IDN?, *OPC?) if these are omitted.
+reset = "*RST"
+idn = "*IDN?"
+opc_query = "*OPC?"
+
+# ------------------------------------------------------------------------------
+# TLS CORE VERBS (Required by the Explicit Proxy / Descriptors)
+# ------------------------------------------------------------------------------
+# ARCHITECTURAL RULE: If this is a mainframe module, you MUST include the 
+# {slot} and {channel} kwargs (e.g., "SOUR{slot}:CHAN{channel}:WAV {value}").
+# If it is a standalone single-channel laser, omit the kwargs (e.g., "SOUR:WAV {value}").
+
+set_wavelength = "SOUR:WAV {value}"      # Maps to laser.wavelength = value
+get_wavelength = "SOUR:WAV?"             # Maps to val = laser.wavelength
+set_power      = "SOUR:POW {value}"      # Maps to laser.power = value
+get_power      = "SOUR:POW?"             # Maps to val = laser.power
+set_output     = "OUTP:STAT {value}"     # Maps to laser.output = "ON"
+get_output     = "OUTP:STAT?"            # Maps to val = laser.output
+
+# ------------------------------------------------------------------------------
+# HARDWARE-SPECIFIC VERBS (Optional)
+# ------------------------------------------------------------------------------
+set_trigger_mode = "TRIG:SOUR {value}"
+get_status_byte  = "STAT:OPER:COND?"     # Useful for custom .wait_until_ready() polling
+
+
+[limits]
+# ------------------------------------------------------------------------------
+# PHYSICAL SAFETY BOUNDARIES (Enforced by MetricParameter Descriptors)
+# ------------------------------------------------------------------------------
+# The 'unit' string MUST be exactly compatible with the Pint UnitRegistry.
+[limits.wavelength]
+min = 1260.0
+max = 1630.0
+unit = "nm"
+
+[limits.power]
+min = -10.0
+max = 13.0
+unit = "dBm"
+
+
+[validation]
+# ------------------------------------------------------------------------------
+# DISCRETE STATE LISTS (Enforced by InstrumentParameter Descriptors)
+# ------------------------------------------------------------------------------
+# Defines the exact acceptable strings to prevent transport layer syntax errors.
+allowed_states = ["ON", "OFF", "1", "0"]
+trigger_modes = ["IMM", "EXT", "BUS"]
+
+
+[defaults]
+# ------------------------------------------------------------------------------
+# INITIALIZATION STATES
+# ------------------------------------------------------------------------------
+# Safe values pushed to the hardware immediately upon framework connection.
+# Numeric values MUST include their unit string to pass Metric validation.
+wavelength = "1550 nm"
+power = "0 dBm"
+output = "OFF"
+
+
+[metadata]
+# ------------------------------------------------------------------------------
+# TOPOLOGICAL DIRECTIVES (Consumed by Factory & ConfigLoader)
+# ------------------------------------------------------------------------------
+is_mainframe = false         # False for Lasers. True ONLY for Chassis multiplexers.
+is_module = false            # True if this hardware plugs into a Chassis.
+is_multichannel = false      # True if a single module/box has multiple laser outputs.
+channel_count = 1            # Defines the bounds for ChannelBase hydration.
+
+# ------------------------------------------------------------------------------
+# EXPLICIT PROXY ROUTING (The "No Magic" Architecture)
+# ------------------------------------------------------------------------------
+# If the instrument requires complex Python methods or custom polling loops,
+# define the path to its dedicated Proxy Class here. 
+# If omitted, the framework safely defaults to `BaseInstrument` (or `ModuleBase`).
+driver_category = "lasers"               # Directory: instruments/lasers/
+driver_file = "template_vendor"          # File: template_vendor.py
+driver_class = "TemplateVendorTLS"       # Class: class TemplateVendorTLS(BaseInstrument):
+
+# ------------------------------------------------------------------------------
+# CAPABILITY FLAGS (Consumed by UI and Script Logic)
+# ------------------------------------------------------------------------------
+domain = "photonics"
+classification = "source"
+has_attenuator = false
+is_tunable = true
+requires_handshake = true    # Flags if .wait_until_ready() is mandatory after parameter changes.

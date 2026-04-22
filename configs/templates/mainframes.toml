@@ -1,0 +1,64 @@
+# ==============================================================================
+# PYLABCONTROL V2 - MAINFRAME/CHASSIS MASTER TEMPLATE
+# ==============================================================================
+# Description: Defines the topological multiplexer. Owns the physical adapter.
+# Path: configs/mainframes/{brand}/{model}.toml
+# ==============================================================================
+
+brand = "VENDOR_NAME"
+model = "MODEL_NUMBER"
+version = "2.1.0"
+
+[scpi_commands]
+# ------------------------------------------------------------------------------
+# IEEE 488.2 STANDARD OVERRIDES
+# ------------------------------------------------------------------------------
+# Framework falls back to defaults (*RST, *IDN?) if these are omitted.
+reset = "*RST"
+idn = "*IDN?"
+clear_status = "*CLS"
+
+# ------------------------------------------------------------------------------
+# TOPOLOGICAL DISCOVERY (Required for ChassisBase)
+# ------------------------------------------------------------------------------
+# REQUIRED: The exact SCPI query used to interrogate a specific slot.
+# Must contain the {slot} placeholder for dynamic nodal injection.
+discovery_query = "SLOT{slot}:IDN?"
+
+[limits]
+# Mainframes generally do not have limits as they do not own physical parameters.
+# Leave empty unless the chassis has global sensors (e.g., backplane_temp).
+
+[validation]
+# Empty for standard mainframes. Use if the chassis has discrete global states.
+
+[defaults]
+# Empty for standard mainframes. Use for global chassis initialization.
+
+[metadata]
+# ------------------------------------------------------------------------------
+# ARCHITECTURAL FLAGS (Consumed by Factory and ChassisBase)
+# ------------------------------------------------------------------------------
+# REQUIRED: Tells the Factory to route instantiation to ChassisBase.
+is_mainframe = true
+is_module = false
+
+# Defines the spatial bounds for the runtime discovery loop.
+max_slots = 4
+
+# Identifies unswappable hardware (e.g., Agilent 8164A built-in display/slot 0).
+main_slot_index = 0
+
+# ------------------------------------------------------------------------------
+# EXPLICIT DRIVER ROUTING (Optional)
+# ------------------------------------------------------------------------------
+# Only define these if the mainframe requires a custom subclass of ChassisBase.
+# driver_category = "mainframes"
+# driver_file = "vendor_name"
+# driver_class = "CustomChassisClass"
+
+# ------------------------------------------------------------------------------
+# CAPABILITY FLAGS
+# ------------------------------------------------------------------------------
+domain = "general"
+classification = "multiplexer"

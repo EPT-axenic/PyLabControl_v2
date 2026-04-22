@@ -11,7 +11,7 @@ import os
 # --- Configuration ---
 # Point this to your unzipped GitHub repository folder
 ROOT_DIR = "." 
-OUTPUT_FILE = "pylabcontrol_knowledge.txt"
+OUTPUT_FILE = "pylabcontrol_v2_knowledge.txt"
 
 # Only grab the files we care about for the architecture
 ALLOWED_EXTENSIONS = {".py", ".toml", ".md"}
@@ -57,30 +57,424 @@ if __name__ == "__main__":
     consolidate_codebase()
 
 ================================================================================
+### FILE: README.md ###
+================================================================================
+
+# PyLabControl V2: The Bedrock Framework
+PyLabControl V2 is a professional-grade lab automation framework designed to decouple high-level instrument logic from low-level hardware communication. By utilizing Python Descriptors, Pydantic models, and a hierarchical configuration system, V2 eliminates boilerplate code and ensures "Hardware Agnostic" automation.
+
+
+# 🏗 The 3-Tier Architecture
+
+The framework is organized into three distinct layers to ensure that changing a physical connection or swapping a brand requires zero changes to your automation logic.
+* **Tier 1: Adapters (The "Pipes")**: Handles raw string transport. Whether you are using GPIB, Ethernet, or a Simulation, the interface remains identical.
+
+* **Tier 2: Descriptors (The "Nouns")**: Handles state management. This layer intercepts property access to perform unit conversion, limit checking, and SCPI mapping.
+
+* **Tier 3: Logic Core (The "Verbs")**: Standardizes instrument behavior. It provides a consistent set of commands for common operations across all supported hardware.
+
+
+# 📂 Project Structure
+
+```
+PyLabControl_v2/
+├── configs/                    # Hardware Maps (The "Vocabulary")
+│   └── lasers/
+│       └── santec/
+│           └── tsl210.toml     # Model-specific limits and SCPI strings
+├── pylabcontrol/               # Main Library Root
+│   ├── adapters/               # Tier 1: Transport Layers
+│   ├── core/                   # Tier 2 & 3: The Engine
+│   ├── instruments/            # Driver Category Bases and Model Drivers
+│   └── utils/                  # Shared Services (Units, Logging, Configs)
+├── scripts/                    # Verification and Test Scripts
+└── setup.py                    # Package installation for 'pip install -e .
+```
+
+
+# 🛠 Script-by-Script Breakdown
+
+## 1. Core Engine (`pylabcontrol/core/`)
+* `models.py`: The **Pydantic Blueprint**. Defines the strict schema for every instrument configuration. It ensures that a TOML file is valid and contains required sections before the hardware is ever contacted.
+
+* `descriptors.py`: The **Parameter Engine**. Uses `InstrumentParameter` and `MetricParameter` to intercept property access. When you set a value, this script handles the validation, unit normalization, and SCPI command generation.
+
+* `base_instrument.py`: The **Logic Parent**. Provides standardized methods for common IEEE 488.2 actions such as querying identification strings, resetting hardware, and clearing status registers.
+
+* `factory.py`: The **Orchestrator**. Dynamically discovers and loads the correct driver, injects the validated TOML config, and attaches the appropriate hardware adapter based on the address string.
+    
+## 2. Adapters (`pylabcontrol/adapters/`)
+* `base_adapter.py`: The Abstract Base Class (ABC) defining the mandatory `write`, `read`, and `query` interface that every transport layer must implement.
+
+* `visa_adapter.py`: Communicates with VISA-compliant instruments (GPIB, USB-TMC, TCPIP::INSTR) using the PyVISA backend.
+
+* `tcp_adapter.py`: Handles raw Ethernet/Socket communication for instruments that do not use the VISA protocol.
+
+* `mock_adapter.py`: A simulation layer that returns pre-defined strings, allowing for software development and testing without physical hardware.
+    
+## 3. Utilities (`pylabcontrol/utils/`)
+* `config_loader.py`: Navigates the hierarchical `configs/` directory to fetch TOML files and "hydrates" them into Pydantic models for the framework.
+
+* `unit_manager.py`: Powered by Pint. Acts as the single source of truth for all dimensional analysis, handling unit conversion and normalization.
+
+* `logging_manager.py`: A hierarchical logging system that categorizes system traffic into Transport, Validation, and Action tiers.
+
+* `decorators.py`: Contains the `instrument_logger` which captures execution time and handles error logging for high-level instrument methods.
+
+
+# 🚀 How the Code Works:
+
+When you execute `laser.wavelength = "1550nm"` in a script, the following sequence occurs:
+
+1. **Validation**: `MetricParameter.__set__` retrieves the `InstrumentConfig` for the specific device.
+
+2. **Safety Check**: It compares the input against the `min` and `max` values defined in the instrument's TOML file.
+
+3. **Normalization**: The `UnitManager` ensures the value is converted to the instrument's preferred base unit (e.g., nanometers).
+
+4. **Translation**: The descriptor looks up the specific SCPI command for "set_wavelength" in the TOML (e.g., finding `"WA"` for a Santec laser).
+
+5. **Dispatch**: The `Adapter` sends the final formatted string (e.g., `WA 1550.0`) to the physical hardware.
+
+
+# 🔧 Installation & Usage
+## 1. Install as an Editable Package
+Navigate to the root directory and run:
+```
+pip install -e .
+```
+
+## 2. Standardized Initialization
+```
+from pylabcontrol_v2.core.factory import load_instrument
+
+# The Factory handles config loading, adapter selection, and driver injection
+
+laser = load_instrument(
+    category="lasers", 
+    brand="santec", 
+    model="tsl210", 
+    address="GPIB0::1::INSTR"
+)
+```
+
+## 3. Interactive Control
+```
+# Nouns: Unit-aware property access
+laser.wavelength = "1550.5 nm" 
+print(laser.wavelength)
+
+# Verbs: Standardized action methods
+laser.reset()
+```
+
+### Architect's Note: 
+This framework is designed to move the complexity of the laboratory into configuration files. If you buy a new laser, you shouldn't have to write new Python code—you should only have to write a new TOML.
+
+================================================================================
 ### FILE: setup.py ###
 ================================================================================
 
 from setuptools import setup, find_packages
 
 setup(
-    name="pylabcontrol",
+    name="pylabcontrol_v2",
     version="2.0.0",
     packages=find_packages(),
     install_requires=[
-        "pyvisa",
+        "pydantic",
         "pint",
+        "pyvisa",
         "toml",
     ],
 )
 
 ================================================================================
-### FILE: pylabcontrol\__init__.py ###
+### FILE: configs\lasers\santec\tsl210.toml ###
+================================================================================
+
+brand = "Santec"
+model = "TSL210"
+version = "2.0.0"
+
+[scpi_commands]
+idn = "ID?"
+set_wavelength = "WA"
+get_wavelength = "WA?"
+set_power = "OP"
+get_power = "OP?"
+set_output_on = "LO"
+set_output_off = "LF"
+get_output_status = "SU"
+
+[limits]
+[limits.wavelength]
+min = 1260.0
+max = 1630.0
+unit = "nm"
+
+[limits.power]
+min = -10.0
+max = 13.0
+unit = "dBm"
+
+# --- Mandatory Sections for V2 Standard ---
+[validation]
+# Empty for now, but the header MUST exist if not using defaults in Pydantic
+
+[defaults]
+# Empty for now
+
+================================================================================
+### FILE: configs\templates\lasers.toml ###
+================================================================================
+
+# ==============================================================================
+# PYLABCONTROL V2 - TUNABLE LASER SOURCE (TLS) MASTER TEMPLATE
+# ==============================================================================
+# Description: Universal configuration schema for Tunable Lasers.
+# Compatibility: Supports Standalone, Modular, and Multi-Channel topologies.
+# ==============================================================================
+
+brand = "TEMPLATE_VENDOR"
+model = "GENERIC_TLS"
+version = "2.1.0"
+
+[scpi_commands]
+# ------------------------------------------------------------------------------
+# IEEE 488.2 STANDARD OVERRIDES
+# ------------------------------------------------------------------------------
+# Framework falls back to defaults (*RST, *IDN?, *OPC?) if these are omitted.
+reset = "*RST"
+idn = "*IDN?"
+opc_query = "*OPC?"
+
+# ------------------------------------------------------------------------------
+# TLS CORE VERBS (Required by the Explicit Proxy / Descriptors)
+# ------------------------------------------------------------------------------
+# ARCHITECTURAL RULE: If this is a mainframe module, you MUST include the 
+# {slot} and {channel} kwargs (e.g., "SOUR{slot}:CHAN{channel}:WAV {value}").
+# If it is a standalone single-channel laser, omit the kwargs (e.g., "SOUR:WAV {value}").
+
+set_wavelength = "SOUR:WAV {value}"      # Maps to laser.wavelength = value
+get_wavelength = "SOUR:WAV?"             # Maps to val = laser.wavelength
+set_power      = "SOUR:POW {value}"      # Maps to laser.power = value
+get_power      = "SOUR:POW?"             # Maps to val = laser.power
+set_output     = "OUTP:STAT {value}"     # Maps to laser.output = "ON"
+get_output     = "OUTP:STAT?"            # Maps to val = laser.output
+
+# ------------------------------------------------------------------------------
+# HARDWARE-SPECIFIC VERBS (Optional)
+# ------------------------------------------------------------------------------
+set_trigger_mode = "TRIG:SOUR {value}"
+get_status_byte  = "STAT:OPER:COND?"     # Useful for custom .wait_until_ready() polling
+
+
+[limits]
+# ------------------------------------------------------------------------------
+# PHYSICAL SAFETY BOUNDARIES (Enforced by MetricParameter Descriptors)
+# ------------------------------------------------------------------------------
+# The 'unit' string MUST be exactly compatible with the Pint UnitRegistry.
+[limits.wavelength]
+min = 1260.0
+max = 1630.0
+unit = "nm"
+
+[limits.power]
+min = -10.0
+max = 13.0
+unit = "dBm"
+
+
+[validation]
+# ------------------------------------------------------------------------------
+# DISCRETE STATE LISTS (Enforced by InstrumentParameter Descriptors)
+# ------------------------------------------------------------------------------
+# Defines the exact acceptable strings to prevent transport layer syntax errors.
+allowed_states = ["ON", "OFF", "1", "0"]
+trigger_modes = ["IMM", "EXT", "BUS"]
+
+
+[defaults]
+# ------------------------------------------------------------------------------
+# INITIALIZATION STATES
+# ------------------------------------------------------------------------------
+# Safe values pushed to the hardware immediately upon framework connection.
+# Numeric values MUST include their unit string to pass Metric validation.
+wavelength = "1550 nm"
+power = "0 dBm"
+output = "OFF"
+
+
+[metadata]
+# ------------------------------------------------------------------------------
+# TOPOLOGICAL DIRECTIVES (Consumed by Factory & ConfigLoader)
+# ------------------------------------------------------------------------------
+is_mainframe = false         # False for Lasers. True ONLY for Chassis multiplexers.
+is_module = false            # True if this hardware plugs into a Chassis.
+is_multichannel = false      # True if a single module/box has multiple laser outputs.
+channel_count = 1            # Defines the bounds for ChannelBase hydration.
+
+# ------------------------------------------------------------------------------
+# EXPLICIT PROXY ROUTING (The "No Magic" Architecture)
+# ------------------------------------------------------------------------------
+# If the instrument requires complex Python methods or custom polling loops,
+# define the path to its dedicated Proxy Class here. 
+# If omitted, the framework safely defaults to `BaseInstrument` (or `ModuleBase`).
+driver_category = "lasers"               # Directory: instruments/lasers/
+driver_file = "template_vendor"          # File: template_vendor.py
+driver_class = "TemplateVendorTLS"       # Class: class TemplateVendorTLS(BaseInstrument):
+
+# ------------------------------------------------------------------------------
+# CAPABILITY FLAGS (Consumed by UI and Script Logic)
+# ------------------------------------------------------------------------------
+domain = "photonics"
+classification = "source"
+has_attenuator = false
+is_tunable = true
+requires_handshake = true    # Flags if .wait_until_ready() is mandatory after parameter changes.
+
+================================================================================
+### FILE: configs\templates\mainframes.toml ###
+================================================================================
+
+# ==============================================================================
+# PYLABCONTROL V2 - MAINFRAME/CHASSIS MASTER TEMPLATE
+# ==============================================================================
+# Description: Defines the topological multiplexer. Owns the physical adapter.
+# Path: configs/mainframes/{brand}/{model}.toml
+# ==============================================================================
+
+brand = "VENDOR_NAME"
+model = "MODEL_NUMBER"
+version = "2.1.0"
+
+[scpi_commands]
+# ------------------------------------------------------------------------------
+# IEEE 488.2 STANDARD OVERRIDES
+# ------------------------------------------------------------------------------
+# Framework falls back to defaults (*RST, *IDN?) if these are omitted.
+reset = "*RST"
+idn = "*IDN?"
+clear_status = "*CLS"
+
+# ------------------------------------------------------------------------------
+# TOPOLOGICAL DISCOVERY (Required for ChassisBase)
+# ------------------------------------------------------------------------------
+# REQUIRED: The exact SCPI query used to interrogate a specific slot.
+# Must contain the {slot} placeholder for dynamic nodal injection.
+discovery_query = "SLOT{slot}:IDN?"
+
+[limits]
+# Mainframes generally do not have limits as they do not own physical parameters.
+# Leave empty unless the chassis has global sensors (e.g., backplane_temp).
+
+[validation]
+# Empty for standard mainframes. Use if the chassis has discrete global states.
+
+[defaults]
+# Empty for standard mainframes. Use for global chassis initialization.
+
+[metadata]
+# ------------------------------------------------------------------------------
+# ARCHITECTURAL FLAGS (Consumed by Factory and ChassisBase)
+# ------------------------------------------------------------------------------
+# REQUIRED: Tells the Factory to route instantiation to ChassisBase.
+is_mainframe = true
+is_module = false
+
+# Defines the spatial bounds for the runtime discovery loop.
+max_slots = 4
+
+# Identifies unswappable hardware (e.g., Agilent 8164A built-in display/slot 0).
+main_slot_index = 0
+
+# ------------------------------------------------------------------------------
+# EXPLICIT DRIVER ROUTING (Optional)
+# ------------------------------------------------------------------------------
+# Only define these if the mainframe requires a custom subclass of ChassisBase.
+# driver_category = "mainframes"
+# driver_file = "vendor_name"
+# driver_class = "CustomChassisClass"
+
+# ------------------------------------------------------------------------------
+# CAPABILITY FLAGS
+# ------------------------------------------------------------------------------
+domain = "general"
+classification = "multiplexer"
+
+================================================================================
+### FILE: configs\templates\modules.toml ###
+================================================================================
+
+# ==============================================================================
+# PYLABCONTROL V2 - HARDWARE MODULE TEMPLATE
+# ==============================================================================
+# Description: Defines a proxy driver. Does NOT own an adapter. Relies on parent.
+# ==============================================================================
+
+brand = "VENDOR_NAME"
+model = "MODEL_NUMBER"
+version = "2.0.0"
+
+[scpi_commands]
+# REQUIRED: All module SCPI commands MUST use Nodal Injection placeholders
+# The ModuleBase proxy will automatically inject {slot} and {channel} at runtime.
+set_parameter = "SOUR{slot}:CHAN{channel}:PARAM {value}"
+get_parameter = "SOUR{slot}:CHAN{channel}:PARAM?"
+
+# Status querying specific to this module (Optional)
+opc_query = "SOUR{slot}:CHAN{channel}:OPC?"
+
+[limits]
+# Enforced by MetricParameter descriptors. 
+# Must explicitly map to a base SI/derived unit defined in the UnitManager.
+[limits.parameter_name]
+min = 0.0
+max = 100.0
+unit = "base_unit"
+
+[validation]
+# Enforced by InstrumentParameter descriptors.
+# Defines the exact string matching required for discrete states.
+allowed_states = ["ON", "OFF", "1", "0"]
+trigger_modes = ["IMM", "EXT", "BUS"]
+
+[defaults]
+# Safe initialization states injected automatically upon module discovery.
+# Must include the unit string to pass through the MetricParameter validation.
+parameter_name = "0.0 base_unit"
+output_state = "OFF"
+
+[metadata]
+# REQUIRED FOR MODULES: Identifies this config as a proxy, not a standalone device.
+is_module = true
+
+# ------------------------------------------------------------------------------
+# EXPLICIT PROXY ROUTING (The "No Magic" Architecture)
+# ------------------------------------------------------------------------------
+# Maps this config to a specific Python driver file and class.
+driver_category = "modules"               # e.g., 'lasers', 'smus'
+driver_file = "vendor_name"               # The .py filename
+driver_class = "ModelNameModule"          # The class inside that file
+
+# Taxonomy flags for programmatic filtering (e.g., UI dashboard generation)]
+domain = "photonics"       # e.g., 'electrical', 'motion', 'photonics'
+classification = "source"  # e.g., 'sensor', 'actuator', 'source'
+
+# Capability flags utilized by the Logic Core
+is_multichannel = false
+channel_count = 1
+requires_handshake = true
+
+================================================================================
+### FILE: pylabcontrol_v2\__init__.py ###
 ================================================================================
 
 
 
 ================================================================================
-### FILE: pylabcontrol\adapters\base_adapter.py ###
+### FILE: pylabcontrol_v2\adapters\base_adapter.py ###
 ================================================================================
 
 from abc import ABC, abstractmethod
@@ -119,7 +513,7 @@ class BaseAdapter(ABC):
         pass
 
 ================================================================================
-### FILE: pylabcontrol\adapters\mock_adapter.py ###
+### FILE: pylabcontrol_v2\adapters\mock_adapter.py ###
 ================================================================================
 
 from .base_adapter import BaseAdapter
@@ -152,7 +546,7 @@ class MockAdapter(BaseAdapter):
         pass
 
 ================================================================================
-### FILE: pylabcontrol\adapters\tcp_adapter.py ###
+### FILE: pylabcontrol_v2\adapters\tcp_adapter.py ###
 ================================================================================
 
 import socket
@@ -189,7 +583,7 @@ class TCPAdapter(BaseAdapter):
             self.sock.close()
 
 ================================================================================
-### FILE: pylabcontrol\adapters\visa_adapter.py ###
+### FILE: pylabcontrol_v2\adapters\visa_adapter.py ###
 ================================================================================
 
 import pyvisa as visa
@@ -222,345 +616,1201 @@ class VISAAdapter(BaseAdapter):
         self.rm.close()
 
 ================================================================================
-### FILE: pylabcontrol\adapters\__init__.py ###
+### FILE: pylabcontrol_v2\adapters\__init__.py ###
 ================================================================================
 
 
 
 ================================================================================
-### FILE: pylabcontrol\core\base_instrument.py ###
+### FILE: pylabcontrol_v2\core\base_channels.py ###
 ================================================================================
 
-import pyvisa as visa
-from ..adapters.base_adapter import BaseAdapter
-from ..utils.unit_manager import um, u
+from typing import Any, Dict, TYPE_CHECKING
+from pylabcontrol_v2.core.base_instrument import BaseInstrument
+
+if TYPE_CHECKING:
+    from pylabcontrol_v2.core.base_instrument import BaseInstrument
+
+class ChannelBase(BaseInstrument):
+    """
+    Proxy driver representing a discrete physical channel of a hardware device.
+
+    This class provides a unit-aware, descriptor-driven interface for sub-components 
+    (channels) of a larger hardware device[cite: 200]. It inherits the parent's 
+    configuration and adapter while appending its specific channel coordinate to 
+    the routing path for Nodal Injection[cite: 151, 166].
+
+    Attributes:
+        channel_id (Any): The identifier for this channel (e.g., 1, 2, or 'A', 'B').
+        _parent (BaseInstrument): The hardware device or module that owns this channel.
+        routing_kwargs (Dict[str, Any]): Topological coordinates for SCPI formatting.
+
+    Engineering Context:
+        Channels are implemented as "Transparent Proxies." They do not maintain 
+        their own I/O locks or adapters[cite: 154]. Instead, they delegate all 
+        raw transport requests to their parent. This recursion ensures that if 
+         a channel is part of a mainframe module, its I/O is automatically 
+        wrapped in the chassis-level Mutex lock[cite: 175]. If it is a channel 
+        of a standalone instrument, it bypasses unnecessary locking for 
+        maximum performance[cite: 156].
+    """
+    
+    def __init__(self, parent: 'BaseInstrument', channel_id: Any) -> None:
+        """
+        Initializes the channel proxy and merges topological coordinates.
+
+        Args:
+            parent (BaseInstrument): The parent instrument or module owning this channel.
+            channel_id (Any): The physical channel identifier (numeric or string).
+        """
+        self._parent = parent
+        self.channel_id = channel_id
+        
+        # Inherit the validated config and adapter from the parent [cite: 91, 92]
+        super().__init__(adapter=self._parent.adapter, config=self._parent.config)
+        
+        # RECURSIVE ROUTING: Merge this channel ID with the parent's existing coordinates.
+        # This handles Slot -> Channel and Standalone -> Channel mapping automatically.
+        self.routing_kwargs = {**self._parent.routing_kwargs, "channel": self.channel_id}
+
+    def write_raw(self, command: str) -> None:
+        """
+        Delegates raw transmission to the parent to maintain the I/O chain.
+        
+        Args:
+            command (str): The fully formatted SCPI string.
+
+        Engineering Context:
+            By calling the parent's raw method rather than the adapter directly, 
+            we ensure that any thread-safety logic (Mutex locks) defined in the 
+            parent or grandparent is respected[cite: 156, 175].
+        """
+        if hasattr(self._parent, 'write_raw'):
+            self._parent.write_raw(command)
+        else:
+            # Fallback to direct adapter if parent is a primitive BaseInstrument
+            self.adapter.write(command)
+
+    def query_raw(self, command: str) -> str:
+        """
+        Delegates atomic query to the parent to maintain the I/O chain.
+
+        Args:
+            command (str): The SCPI query string.
+
+        Returns:
+            str: The raw hardware response.
+        """
+        if hasattr(self._parent, 'query_raw'):
+            return self._parent.query_raw(command)
+        return self.adapter.query(command)
+
+================================================================================
+### FILE: pylabcontrol_v2\core\base_instrument.py ###
+================================================================================
+
+import logging
+from typing import Optional, List, Any
+from pylabcontrol_v2.core.models import InstrumentConfig
+from pylabcontrol_v2.adapters.base_adapter import BaseAdapter
+from pylabcontrol_v2.utils.unit_manager import um
 
 class BaseInstrument:
     """
-    Tier 3: The Logic Core. 
-    Refactored to support Adapter Injection while maintaining full 
-    validation and IEEE 488.2 command sets. 
+    Tier 3: The Logic Core and Universal Base Driver.
+
+    This class serves as the foundational bridge between high-level Pythonic 
+    intents (Descriptors/Properties) and low-level physical transport (Adapters). 
+    It enforces State-Aware Validation, handles unit normalization, and provides 
+    universal access to IEEE 488.2 standard SCPI commands.
+
+    Attributes:
+        config (InstrumentConfig): The loaded Pydantic TOML configuration schema.
+        adapter (BaseAdapter): The injected transport layer (VISA, TCP, Mock, etc.).
+        log (logging.Logger): The dedicated logger instance mapped to this specific model.
+        instrument_id (str): A unique string identifier (e.g., "SANTEC_TSL210") for log tracing.
+
+    Engineering Context:
+        By forcing every instrument to inherit from this class, we guarantee a 
+        Hardware-Agnostic Ecosystem. Whether an instrument is an $80,000 mainframe 
+        or a $100 USB generic device, the framework evaluates its limits, logs its 
+        actions, and handles its basic IEEE status registers identically.
     """
-    def __init__(self, adapter: BaseAdapter, config=None, logger=None, instrument_id=None):
+
+    def __init__(self, config: InstrumentConfig, adapter: BaseAdapter) -> None:
+        """
+        Initializes the abstract instrument logic core.
+
+        Args:
+            config (InstrumentConfig): The validated TOML configuration dictionary.
+            adapter (BaseAdapter): The initialized physical communication bus.
+        """
+        self.config = config
         self.adapter = adapter
-        self.config = config or {} # <--- Store the TOML data here
-        self.logger = logger
-        self.um = um  # Shared unit manager
+        
+        # Consistent naming: Use 'self.log' everywhere for unified routing
+        self.log = logging.getLogger(f"pylabcontrol_v2.{self.config.model.lower()}")
+        
+        # Build the ID once from the config for high-speed logging
+        self.instrument_id = f"{self.config.brand.upper()}_{self.config.model.upper()}"
 
-        # Build standardized ID and sync with adapter for shared context
-        self.instrument_id = instrument_id or self.build_instrument_id()
-        self.adapter.instrument_id = self.instrument_id
+        # The universal coordinate dictionary for Nodal Injection
+        self.routing_kwargs = {}
 
-    def build_instrument_id(self):
-        """Constructs a standard ID: <brand>_<model>_<class_name>"""
-        brand = getattr(self, "brand", "UnknownBrand")
-        model = getattr(self, "model", "UnknownModel")
-        class_name = self.__class__.__name__
-        return f"{brand}_{model}_{class_name}"
+    # --------------------------------------------------------------------------
+    # I/O DELEGATION LAYER (The Mutex Gate)
+    # --------------------------------------------------------------------------
+    # These methods are designed to be overridden by ModuleBase or ChannelBase 
+    # to wrap hardware traffic in Mutex locks.
+
+    def write_raw(self, command: str) -> None:
+        """
+        Final dispatch point for all string commands.
+        
+        Engineering Context:
+            By routing all commands through this method instead of calling 
+            self.adapter directly, we allow modular proxies to intercept the 
+            call and apply thread-safety locks. [cite: 156, 177]
+        """
+        self.adapter.write(command)
+
+    def query_raw(self, command: str) -> str:
+        """Final dispatch point for all queries."""
+        return self.adapter.query(command)
+
+    # --------------------------------------------------------------------------
+    # VALIDATIONS (The Bouncers)
+    # --------------------------------------------------------------------------
+
+    def validate_state(self, value: Any, allowed_list: List[str], context: str = "") -> str:
+        """
+        Validates discrete string states against dynamically loaded configuration lists.
+
+        Args:
+            value (Any): The target state requested by the user or script.
+            allowed_list (List[str]): The enumerated list of acceptable states from the TOML.
+            context (str, optional): The name of the parameter being validated (for logging). Defaults to "".
+
+        Returns:
+            str: The fully validated, uppercase string representation of the state.
+
+        Raises:
+            ValueError: If the requested state does not exist in the allowed_list.
+
+        Engineering Context:
+            Acts as a fail-safe firewall. Prevents bad strings (e.g., 'ONN' instead of 'ON') 
+            from locking up hardware transport layer queues by catching them in Python first.
+        """
+        val_str = str(value).upper()
+        upper_allowed = [str(a).upper() for a in allowed_list]
+
+        if val_str not in upper_allowed:
+            self.log.error(f"[{self.instrument_id}] INVALID STATE: '{value}' for {context}")
+            raise ValueError(f"Invalid state '{value}' for {context}. Allowed: {allowed_list}")
+        
+        return val_str
+
+    def validate_level(self, value: Any, target_unit: str, context: Optional[str] = None) -> Any:
+        """
+        Validates numeric magnitude against physical hardware limits using the UnitManager.
+
+        Args:
+            value (Any): The requested level (can be raw float, formatted string, or Pint Quantity).
+            target_unit (str): The physical unit the specific hardware expects.
+            context (Optional[str]): The TOML limit block name (e.g., 'wavelength_range').
+
+        Returns:
+            Any: A normalized Pint Quantity object mathematically representing the target state.
+
+        Raises:
+            ValueError: If the normalized value violates the min/max bounds defined in the TOML.
+
+        Engineering Context:
+            This is the core of the framework's physical safety matrix. By evaluating 
+            limits against Pint Quantities rather than raw floats, we ensure that a 
+            request of '1.55 um' is safely validated against a TOML limit of '1600 nm'.
+        """
+        # Normalize input to a Pint Quantity
+        qty = um.normalise_unit_input(value, target_unit, context=context)
+
+        # Check limits if they exist in the Pydantic config
+        if context and hasattr(self.config.limits, context):
+            limit_cfg = getattr(self.config.limits, context)
+            val_num = qty.magnitude
+
+            if val_num < limit_cfg.min or val_num > limit_cfg.max:
+                self.log.error(f"[{self.instrument_id}] LIMIT BREACH: {qty} is outside {context} range")
+                raise ValueError(
+                    f"Out of bounds: {qty} for {context}. "
+                    f"Range: [{limit_cfg.min}, {limit_cfg.max}] {limit_cfg.unit}"
+                )
+        return qty
 
     # --------------------------------------------------------------------------
     # IEEE 488.2 Common Commands (Verbs) - Refactored for Adapter Tier
     # --------------------------------------------------------------------------
 
-    def clear_status(self):
-        """*CLS - Clears status byte and error queue."""
-        self.adapter.write("*CLS")
+    def clear_status(self) -> None:
+        """
+        Clears the internal instrument status byte and standard event registers.
+        Uses the `*CLS` standard command or overrides defined in the TOML.
+        """
+        cmd = self.config.scpi_commands.get("clear_status", "*CLS")
+        self.write_raw(cmd)
 
-    def ese(self, data: int):
-        """*ESE <data> - Sets bits in standard event status enable register. [cite: 1081]"""
-        self.adapter.write(f"*ESE {data}")
+    def ese(self, data: int) -> None:
+        """
+        Sets the bits in the Standard Event Status Enable Register.
+
+        Args:
+            data (int): The decimal representation of the bitmask.
+        """
+        self.write_raw(f"*ESE {data}")
 
     def ese_query(self) -> str:
-        """*ESE? - Queries standard event status enable register. [cite: 1083]"""
-        return self.adapter.query("*ESE?")
+        """
+        Queries the current value of the Standard Event Status Enable Register.
+
+        Returns:
+            str: The hardware string response representing the decimal bitmask.
+        """
+        return self.query_raw("*ESE?")
 
     def esr_query(self) -> str:
-        """*ESR? - Queries standard event status register. [cite: 1086]"""
-        return self.adapter.query("*ESR?")
+        """
+        Queries and subsequently clears the Standard Event Status Register.
+
+        Returns:
+            str: The decimal representation of the register byte.
+        """
+        return self.query_raw("*ESR?")
 
     def idn(self) -> str:
-        """*IDN? - Queries instrument identification string. [cite: 1089]"""
-        return self.adapter.query("*IDN?")
+        """
+        Queries the unique instrument identification string.
 
-    def opc(self):
-        """*OPC - Sets bit 0 in SESR when operations complete. [cite: 1091]"""
-        self.adapter.write("*OPC")
+        Returns:
+            str: The IDN string containing Manufacturer, Model, Serial, and Firmware details.
+        """
+        cmd = self.config.scpi_commands.get("idn", "*IDN?")
+        return self.query_raw(cmd)
+
+    def opc(self) -> None:
+        """
+        Sets bit 0 in the Standard Event Status Register when all pending operations complete.
+        Crucial for asynchronous hardware synchronization.
+        """
+        self.write_raw("*OPC")
 
     def opc_query(self) -> str:
-        """*OPC? - Queries if all operations are complete. [cite: 1093]"""
-        return self.adapter.query("*OPC?")
+        """
+        Halts the execution queue until all pending operations are complete.
+
+        Returns:
+            str: "1" when the physical execution queue is successfully cleared.
+        """
+        return self.query_raw("*OPC?")
 
     def opt_query(self) -> str:
-        """*OPT? - Queries installed options. [cite: 1095]"""
-        return self.adapter.query("*OPT?")
+        """
+        Queries the hardware to return all installed hardware/software options.
 
-    def psc(self, state: str):
-        """*PSC <0|1> - Controls power-on status clear. [cite: 1097]"""
-        self.adapter.write(f"*PSC {state}")
+        Returns:
+            str: Comma-separated list of installed modular options.
+        """
+        return self.query_raw("*OPT?")
+
+    def psc(self, state: str) -> None:
+        """
+        Controls the Power-on Status Clear flag.
+
+        Args:
+            state (str): '0' (Retain registers across reboots) or '1' (Clear upon boot).
+        """
+        self.write_raw(f"*PSC {state}")
 
     def psc_query(self) -> str:
-        """*PSC? - Queries power-on status clear setting. [cite: 1099]"""
-        return self.adapter.query("*PSC?")
+        """
+        Queries the current Power-on Status Clear setting.
 
-    def recall(self, filename: str):
-        """*RCL - Recalls configuration from file. [cite: 1101]"""
-        self.adapter.write(f'*RCL "{filename}"')
+        Returns:
+            str: Current integer flag ('0' or '1') as a string.
+        """
+        return self.query_raw("*PSC?")
 
-    def reset(self):
-        """*RST - Resets instrument to factory defaults. [cite: 1103]"""
-        self.adapter.write("*RST")
+    def recall(self, filename: str) -> None:
+        """
+        Recalls a saved instrument configuration state from the device memory.
 
-    def save(self, filename: str):
-        """*SAV - Saves current configuration to file. [cite: 1105]"""
-        self.adapter.write(f'*SAV "{filename}"')
+        Args:
+            filename (str): The specific registry slot or filename on the hardware.
+        """
+        self.write_raw(f'*RCL "{filename}"')
 
-    def sre(self, data: int):
-        """*SRE <data> - Sets service request enable register. [cite: 1107]"""
-        self.adapter.write(f"*SRE {data}")
+    def reset(self) -> None:
+        """
+        Executes a hard reset of the instrument to factory default conditions.
+        Fetches the specific reset string (`*RST` by default) from the TOML override.
+        """
+        cmd = self.config.scpi_commands.get("reset", "*RST")
+        self.write_raw(cmd)
+
+    def save(self, filename: str) -> None:
+        """
+        Saves the current hardware configuration state into the device's volatile memory.
+
+        Args:
+            filename (str): The target registry slot or filename.
+        """
+        self.write_raw(f'*SAV "{filename}"')
+
+    def sre(self, data: int) -> None:
+        """
+        Sets the Service Request Enable Register bitmask.
+
+        Args:
+            data (int): The decimal representation of the target bitmask.
+        """
+        self.write_raw(f"*SRE {data}")
 
     def sre_query(self) -> str:
-        """*SRE? - Queries service request enable register. [cite: 1109]"""
-        return self.adapter.query("*SRE?")
+        """
+        Queries the Service Request Enable Register configuration.
+
+        Returns:
+            str: Decimal representation of the configured bitmask.
+        """
+        return self.query_raw("*SRE?")
 
     def stb_query(self) -> str:
-        """*STB? - Queries status byte. [cite: 1111]"""
-        return self.adapter.query("*STB?")
+        """
+        Queries the global Status Byte Register. Useful for polling hardware errors.
 
-    def trigger(self):
-        """*TRG - Triggers the instrument. [cite: 1114]"""
-        self.adapter.write("*TRG")
+        Returns:
+            str: Decimal representation of the Status Byte.
+        """
+        return self.query_raw("*STB?")
+
+    def trigger(self) -> None:
+        """
+        Forces an immediate hardware trigger execution. Assumes the instrument 
+        is pre-armed via its specific acquisition logic.
+        """
+        self.write_raw("*TRG")
 
     def self_test(self) -> str:
-        """*TST? - Runs self-test. [cite: 1116]"""
-        return self.adapter.query("*TST?")
+        """
+        Initiates the hardware's internal self-diagnostic routines.
 
-    def wait(self):
-        """*WAI - Waits for pending commands to complete. [cite: 1119]"""
-        self.adapter.write("*WAI")
+        Returns:
+            str: "0" if passed, or an error code indicating hardware failure.
+        """
+        return self.query_raw("*TST?")
 
-    def close(self):
-        """Cleanly releases adapter resources. [cite: 1021-1023]"""
+    def wait(self) -> None:
+        """
+        Halts further SCPI command execution until all pending physical actions 
+        (e.g., stage movement, source sweeping) have fully completed.
+        """
+        self.write_raw("*WAI")
+
+    def close(self) -> None:
+        """
+        Cleanly closes the transport layer connection and releases system bus resources.
+        Must be called prior to script termination to prevent locked sockets/GPIB faults.
+        """
         self.adapter.close()
 
 ================================================================================
-### FILE: pylabcontrol\core\descriptors.py ###
+### FILE: pylabcontrol_v2\core\base_mainframe.py ###
+================================================================================
+
+import threading
+import logging
+from typing import Dict, Any, Optional, TYPE_CHECKING
+from pydantic import BaseModel
+from pylabcontrol_v2.core.base_instrument import BaseInstrument
+
+if TYPE_CHECKING:
+    from pylabcontrol_v2.core.base_mainframe import ChassisBase
+
+class ModuleBase(BaseInstrument):
+    """
+    Proxy driver for dynamically discovered hardware modules.
+
+    This class serves as a logical abstraction for sub-components installed within 
+    a modular mainframe. It facilitates Nodal Injection by managing spatial 
+    coordinates (slot, channel) and delegates all physical transport to the parent 
+    chassis to maintain absolute thread safety across shared hardware buses.
+
+    Attributes:
+        slot (int): The physical hardware slot index this module occupies.
+        _parent (ChassisBase): Reference to the parent multiplexer that owns the physical I/O.
+        routing_kwargs (Dict[str, Any]): Dictionary of topological coordinates injected into SCPI templates.
+
+    Engineering Context:
+        Modules do not "own" a direct connection to the hardware adapter. In industrial-grade 
+        control systems, multiple modules frequently share a single communication pipe (e.g., GPIB, USB). 
+        Uncoordinated concurrent writes will lead to packet corruption and undefined hardware states. 
+        This class mandates that every atomic I/O operation must acquire the parent's `io_lock`, 
+        guaranteeing serialized, safe execution.
+    """
+    
+    def __init__(self, parent_chassis: 'ChassisBase', slot_index: int, config: BaseModel) -> None:
+        """
+        Initializes the dynamic module proxy and establishes the routing context.
+
+        Args:
+            parent_chassis (ChassisBase): The mainframe handling physical I/O routing.
+            slot_index (int): The integer slot identifier mapping to physical hardware.
+            config (BaseModel): The dynamically loaded Pydantic TOML configuration schema.
+        """
+        self._parent = parent_chassis
+        self.slot = slot_index
+        # Inherit the shared hardware adapter from the chassis
+        super().__init__(adapter=self._parent.adapter, config=config)
+        
+        # Inject our slot into the routing dictionary for descriptor templates
+        self.routing_kwargs = {"slot": self.slot}
+
+    def write_raw(self, command: str) -> None:
+        """
+        Transmits a raw SCPI string to the hardware via the parent's Mutex lock.
+
+        Args:
+            command (str): The fully formatted SCPI string ready for transport.
+            
+        Engineering Context:
+            By overriding write_raw, we intercept the low-level traffic generated by 
+            descriptors and ensure it passes through the chassis-level thread-safety 
+            gatekeeper (`io_lock`).
+        """
+        with self._parent.io_lock:
+            self.adapter.write(command)
+
+    def query_raw(self, command: str) -> str:
+        """
+        Executes an atomic query operation via the parent's Mutex lock.
+
+        Args:
+            command (str): The SCPI query string.
+
+        Returns:
+            str: The raw hardware response string.
+            
+        Engineering Context:
+            Serializes the "Write-then-Read" cycle, preventing other threads or 
+            modules from injecting commands between the query and the response.
+        """
+        with self._parent.io_lock:
+            return self.adapter.query(command)
+
+class ChassisBase(BaseInstrument):
+    """
+    Physical I/O owner and topological multiplexer for multi-slot mainframes.
+
+    The ChassisBase acts as the central orchestrator for modular hardware. It handles 
+    the initial physical handshake, establishes the global synchronization lock, 
+    and performs runtime discovery to dynamically hydrate its internal slot registry.
+
+    Attributes:
+        slots (Dict[int, ModuleBase]): Registry of discovered modules mapped by slot index.
+        io_lock (threading.Lock): The global framework mutex ensuring atomic I/O.
+
+    Engineering Context:
+        Mainframes are treated as dynamic execution containers. By centralizing 
+        concurrency control at the chassis level, the framework permits high-level 
+        scripts to perform non-blocking, parallel operations (e.g., sweeping multiple 
+        lasers simultaneously) while ensuring the underlying serial bus remains 
+        uncorrupted by multiplexing collisions.
+    """
+    
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """
+        Initializes the multiplexer and triggers topological discovery.
+
+        Args:
+            *args (Any): Positional arguments passed to BaseInstrument.
+            **kwargs (Any): Keyword arguments passed to BaseInstrument.
+        """
+        super().__init__(*args, **kwargs)
+        self.slots: Dict[int, ModuleBase] = {}
+        self.io_lock = threading.Lock()
+        
+        # Trigger dynamic discovery upon instantiation if defined in the TOML
+        if getattr(self.config, "is_mainframe", False) or "discovery_query" in self.config.scpi_commands:
+            self.discover_modules()
+
+    def discover_modules(self) -> None:
+        """
+        Interrogates physical slots to dynamically hydrate module proxies.
+
+        This method executes a discovery loop across the hardware backplane, 
+        identifying installed modules and mapping them to their corresponding 
+        TOML configurations and explicit Python drivers.
+
+        Engineering Context:
+            Discovery is performed at runtime to ensure the software matches physical reality. 
+            The engine utilizes Nodal Injection to query each slot's identification (`*IDN?`) 
+            and employs the Factory to load the correct driver, prioritizing explicit 
+            proxy classes defined in the TOML metadata.
+        """
+        from pylabcontrol_v2.utils.config_loader import ConfigLoader
+        import importlib
+        
+        # Identify hardware bounds from metadata
+        max_slots = getattr(self.config.metadata, "max_slots", 4)
+        discovery_template = self.config.scpi_commands.get("discovery_query", "SLOT{slot}:IDN?")
+
+        for slot_idx in range(max_slots + 1):  
+            # Generate the nodal discovery query
+            query = discovery_template.format(slot=slot_idx)
+            
+            with self.io_lock:
+                try: 
+                    # Interrogate slot; empty slots will throw or timeout
+                    response = self.adapter.query(query).strip()
+                except Exception: 
+                    continue
+                
+            # Filter for valid hardware responses
+            if response and "Empty" not in response and "ERROR" not in response:
+                try:
+                    # Parse standard Agilent/IEEE format: "Brand,Model,Serial,Firmware"
+                    parts = response.split(',')
+                    if len(parts) >= 2:
+                        brand = parts[0].strip().lower()
+                        model = parts[1].strip()
+                        
+                        # Fetch validated TOML config
+                        module_config = ConfigLoader.load_config("modules", brand, model)
+                        
+                        # --- EXPLICIT PROXY RESOLUTION ---
+                        # Allows for specialized logic (e.g. Laser vs Power Meter)
+                        metadata = module_config.metadata or {}
+                        if "driver_class" in metadata:
+                            cat = metadata.get("driver_category", "modules")
+                            file = metadata.get("driver_file", brand)
+                            cls_name = metadata.get("driver_class")
+                            
+                            mod_path = f"pylabcontrol_v2.instruments.{cat}.{file}"
+                            driver_mod = importlib.import_module(mod_path)
+                            TargetClass = getattr(driver_mod, cls_name)
+                            
+                            # Bind specialized driver instance
+                            self.slots[slot_idx] = TargetClass(self, slot_idx, module_config)
+                        else:
+                            # Bind generic ModuleBase proxy
+                            self.slots[slot_idx] = ModuleBase(self, slot_idx, module_config)
+                            
+                        self.log.info(f"Discovered {brand.upper()} {model} in Slot {slot_idx}")
+                except Exception as e:
+                    self.log.error(f"Failed to load module in Slot {slot_idx}: {e}")
+
+================================================================================
+### FILE: pylabcontrol_v2\core\descriptors.py ###
 ================================================================================
 
 import logging
 from typing import Any, Optional, List, Union
-from pylabcontrol_v2.utils.unit_manager import um, u
 from pylabcontrol_v2.utils.logging_manager import LogTiers
+from pylabcontrol_v2.utils.unit_manager import um
 
-# Descriptors operate in the Validation tier to track logic translation
 log = logging.getLogger(LogTiers.VALIDATION)
 
 class InstrumentParameter:
     """
-    Tier 2: Universal Descriptor for basic Instrument Settings (Nouns).
-    Handles mapping between class attributes and raw hardware communication.
+    A discrete, state-aware data descriptor for hardware properties.
+
+    This class enforces the Intent-to-Action pipeline for simple hardware 
+    states (e.g., ON/OFF, modes, boolean flags). It intercepts attribute 
+    assignments, dynamically fetches abstract SCPI templates from the 
+    instrument's TOML configuration, and delegates transport to the adapter.
+
+    Attributes:
+        scpi_set (Optional[str]): The TOML configuration key for the write command template.
+        scpi_get (Optional[str]): The TOML configuration key for the read query template.
+        allowed (Optional[List[str]]): A list of valid discrete states allowed for this parameter.
+        name (str): The assigned attribute name of the descriptor (populated automatically).
+
+    Engineering Context:
+        By utilizing Python's descriptor protocol (`__get__`, `__set__`), we 
+        prevent the user from having to call explicit methods (like `.set_output('ON')`).
+        Instead, they use natural property assignments (`.output = 'ON'`), while 
+        the framework invisibly handles the validation and I/O routing.
     """
-    def __init__(self, 
-                 scpi_set: Optional[str] = None, 
-                 scpi_get: Optional[str] = None, 
-                 allowed: Optional[List[str]] = None):
+
+    def __init__(
+        self, 
+        scpi_set: Optional[str] = None, 
+        scpi_get: Optional[str] = None, 
+        allowed: Optional[List[str]] = None
+    ) -> None:
+        """
+        Initializes the state descriptor.
+
+        Args:
+            scpi_set (Optional[str]): TOML key mapping to the setter SCPI command.
+            scpi_get (Optional[str]): TOML key mapping to the getter SCPI query.
+            allowed (Optional[List[str]]): Enumerated list of valid strings/states.
+        """
         self.scpi_set = scpi_set
         self.scpi_get = scpi_get
         self.allowed = allowed
         self.name: str = "" 
 
-    def __set_name__(self, owner, name: str):
+    def __set_name__(self, owner: type, name: str) -> None:
+        """
+        Automatically binds the descriptor instance to its assigned variable name.
+        
+        Args:
+            owner (type): The class owning the descriptor.
+            name (str): The variable name used in the class body.
+        """
         self.name = name
 
-    def __get__(self, obj: Any, objtype=None) -> Any:
-        if obj is None:
+    def __get__(self, obj: Any, objtype: Optional[type] = None) -> Any:
+        """
+        Intercepts property retrieval to query the physical hardware state.
+
+        Args:
+            obj (Any): The specific instrument instance accessing the parameter.
+            objtype (Optional[type]): The class of the instrument.
+
+        Returns:
+            Any: The raw string response from the hardware adapter, or the 
+                 descriptor instance itself if accessed via the class.
+
+        Raises:
+            AttributeError: If the descriptor was instantiated without a `scpi_get` key.
+        """
+        if obj is None: 
             return self
         
         if not self.scpi_get:
-            log.error(f"[{obj.instrument_id}] Attempted to read write-only parameter: {self.name}")
             raise AttributeError(f"Parameter '{self.name}' is write-only.")
         
-        raw_val = obj.adapter.query(self.scpi_get)
-        log.debug(f"[{obj.instrument_id}] READ {self.name}: raw='{raw_val}'")
+        # Lookup the actual SCPI command from TOML
+        cmd_template = obj.config.scpi_commands.get(self.scpi_get)
+        
+        # Nodal Injection
+        formatted_cmd = cmd_template.format(**obj.routing_kwargs)
+        
+        raw_val = obj.adapter.query(formatted_cmd)
+        log.debug(f"[{obj.instrument_id}] READ {self.name}: {raw_val}")
         return raw_val
 
-    def __set__(self, obj: Any, value: Any):
+    def __set__(self, obj: Any, value: Any) -> None:
+        """
+        Intercepts property assignment to validate state and command the hardware.
+
+        Args:
+            obj (Any): The specific instrument instance.
+            value (Any): The intended target state.
+
+        Raises:
+            AttributeError: If the descriptor was instantiated without a `scpi_set` key.
+            ValueError: If `value` is not found within the `allowed` list.
+        """
         if not self.scpi_set:
-            log.error(f"[{obj.instrument_id}] Attempted to write read-only parameter: {self.name}")
             raise AttributeError(f"Parameter '{self.name}' is read-only.")
         
-        # Validation using BaseInstrument logic
+        # 1. State Validation (e.g., ON/OFF)
         if self.allowed:
-            value = obj.validate_state(value, self.allowed)
+            value = obj.validate_state(value, self.allowed, context=self.name)
+        
+        # 2. Lookup the SCPI command (e.g., 'set_wavelength' -> 'WA')
+        cmd_template = obj.config.scpi_commands.get(self.scpi_set)
+
+        # Nodal Injection
+        formatted_cmd = cmd_template.format(value=value, **obj.routing_kwargs)
         
         log.info(f"[{obj.instrument_id}] SET {self.name} -> {value}")
-        command = f"{self.scpi_set} {value}"
-        obj.adapter.write(command)
+        obj.adapter.write(formatted_cmd)
 
 
 class MetricParameter(InstrumentParameter):
     """
-    Tier 2: Unit-aware Descriptor.
-    Intercepts assignment to perform dimensional analysis and limit validation
-    before hardware dispatch.
+    A continuous, unit-aware data descriptor for physical hardware limits.
+
+    Inherits from `InstrumentParameter` but enforces strict integration with 
+    the framework's `UnitManager`. All transactions flowing through this 
+    descriptor must be mathematically bounded and dimensionally normalized 
+    (represented as `Pint.Quantity` objects).
+
+    Attributes:
+        unit (Optional[str]): The fundamental physical unit the hardware expects (e.g., 'nm', 'dBm').
+        limits_key (Optional[str]): The TOML dictionary key defining the physical safety limits.
+
+    Engineering Context:
+        Raw numerical floats must never bypass the UnitManager. This class 
+        acts as the physical firewall, ensuring that an input of `1550` or 
+        `1.55 * u.um` are both safely evaluated, bounded, and converted to 
+        the exact string formatting the specific SCPI backend requires.
     """
-    def __init__(self, 
-                 scpi_set: Optional[str] = None, 
-                 scpi_get: Optional[str] = None, 
-                 unit: Optional[str] = None, 
-                 limits_key: Optional[str] = None):
+
+    def __init__(
+        self, 
+        scpi_set: Optional[str] = None, 
+        scpi_get: Optional[str] = None, 
+        unit: Optional[str] = None, 
+        limits_key: Optional[str] = None
+    ) -> None:
+        """
+        Initializes the metric descriptor.
+
+        Args:
+            scpi_set (Optional[str]): TOML key mapping to the setter SCPI command.
+            scpi_get (Optional[str]): TOML key mapping to the getter SCPI query.
+            unit (Optional[str]): The baseline physical unit expected by the hardware.
+            limits_key (Optional[str]): TOML key for Pydantic limit validations (min/max).
+        """
         super().__init__(scpi_set, scpi_get)
         self.unit = unit
         self.limits_key = limits_key
 
-    def __get__(self, obj: Any, objtype=None) -> Any:
-        if obj is None:
+    def __get__(self, obj: Any, objtype: Optional[type] = None) -> Any:
+        """
+        Intercepts property retrieval, queries hardware, and injects physical units.
+
+        Args:
+            obj (Any): The specific instrument instance.
+            objtype (Optional[type]): The class of the instrument.
+
+        Returns:
+            Any: A fully normalized `Pint.Quantity` object, allowing the user 
+                 to instantly perform mathematical operations on the read state.
+                 
+        Engineering Context:
+            Relies on `super().__get__` to handle Nodal Injection (`{slot}`, `{channel}`)
+            and thread-safe Mutex querying, before intercepting the raw string response
+            to convert it into a Pint Quantity.
+        """
+        if obj is None: 
             return self
-        
-        # Get raw string from hardware via parent InstrumentParameter
+            
         raw_val = super().__get__(obj)
+        # Convert raw string from hardware to Pint Quantity
+        return um.normalise_unit_input(raw_val, self.unit, context=self.name)
+
+    def __set__(self, obj: Any, value: Union[float, str, Any]) -> None:
+        """
+        Intercepts assignment, verifies physical limits, formats magnitude, and pushes data.
+
+        Args:
+            obj (Any): The specific instrument instance.
+            value (Union[float, str, Any]): The intended metric target. Can be a raw float, 
+                                            a string (e.g., '1550 nm'), or a Pint Quantity.
+                                            
+        Raises:
+            ValueError: If the normalized value exceeds the hardware bounds 
+                        defined in the TOML limits block.
+            AttributeError: If the parameter is read-only.
+        """
+        # 1. Delegate validation to the instrument (The Bouncer)
+        normalized = obj.validate_level(
+            value=value, 
+            target_unit=self.unit, 
+            context=self.limits_key
+        )
         
-        # Normalize to the default unit specified in the descriptor
-        quantity = um.normalise_unit_input(raw_val, self.unit, context=self.name)
-        log.debug(f"[{obj.instrument_id}] DECODE {self.name}: {raw_val} -> {quantity}")
-        return quantity
-
-    def __set__(self, obj: Any, value: Union[float, str, Any]):
-        # Retrieve limits from the instrument configuration map
-        limits = obj.config.get('limits', {}).get(self.limits_key, {})
-        min_val = limits.get('min')
-        max_val = limits.get('max')
-
-        # Trigger unit normalization and boundary validation via BaseInstrument
-        try:
-            normalized = obj.validate_level(
-                value, min_val, max_val, self.unit, context=self.name
-            )
-            
-            log.info(f"[{obj.instrument_id}] VALIDATE {self.name}: {value} -> {normalized}")
-            
-            # Format magnitude for SCPI (standardizing on float for precision)
-            val_to_send = normalized.magnitude 
-            command = f"{self.scpi_set} {val_to_send}"
-            obj.adapter.write(command)
-            
-        except ValueError as e:
-            log.error(f"[{obj.instrument_id}] VALIDATION FAILED for {self.name}: {str(e)}")
-            raise
+        # 2. Fetch the SCPI template
+        cmd_template = obj.config.scpi_commands.get(self.scpi_set)
+        if not cmd_template:
+            raise AttributeError(f"Parameter '{self.name}' is read-only.")
+        
+        # 3. Format the precision safely before injection
+        # Hardcoded to 4 decimal places to prevent buffer overflows on legacy IEEE 488.2 gear
+        val_str = f"{normalized.magnitude:.4f}"
+        
+        # 4. Dynamic Nodal Injection (The Magic)
+        # Injects {value}, plus any {slot} or {channel} coordinates this object owns
+        formatted_cmd = cmd_template.format(value=val_str, **obj.routing_kwargs)
+        
+        log.info(f"[{obj.instrument_id}] VALIDATED {self.name}: {value} -> {normalized}")
+        
+        # 5. Thread-Safe Transport Delegation
+        if hasattr(obj, 'write_raw'):
+            obj.write_raw(formatted_cmd)
+        else:
+            obj.adapter.write(formatted_cmd)
 
 ================================================================================
-### FILE: pylabcontrol\core\factory.py ###
+### FILE: pylabcontrol_v2\core\factory.py ###
 ================================================================================
 
 import importlib
 import logging
-from ..adapters.visa_adapter import VISAAdapter
-from ..adapters.tcp_adapter import TCPAdapter
+from typing import Any, Dict
+
+from pylabcontrol_v2.utils.config_loader import ConfigLoader
+from pylabcontrol_v2.adapters.visa_adapter import VISAAdapter
+from pylabcontrol_v2.adapters.tcp_adapter import TCPAdapter
+from pylabcontrol_v2.adapters.mock_adapter import MockAdapter
+from pylabcontrol_v2.core.base_mainframe import ChassisBase
+from pylabcontrol_v2.core.base_instrument import BaseInstrument
 
 logger = logging.getLogger("pylabcontrol_v2.factory")
 
-def load_instrument(category, brand, model, address, **kwargs):
+def load_instrument(
+    category: str, 
+    brand: str, 
+    model: str, 
+    address: str = "MOCK", 
+    **kwargs: Any
+) -> BaseInstrument:
     """
-    Orchestrates Phase 1 Initialization:
-    1. Selects Adapter.
-    2. Dynamically loads Driver.
-    3. Injects Adapter into Instrument.
+    Orchestrates the dynamic instantiation of physical hardware control drivers.
+
+    This factory implements the Tier-3 initialization pipeline. It enforces the 
+    separation of physical topology (Adapters) from software intent (Descriptors) 
+    by dynamically binding a runtime-selected transport layer to a TOML-defined 
+    configuration schema. 
+
+    Args:
+        category (str): The functional taxonomy of the instrument (e.g., 'lasers', 'mainframes', 'modules').
+        brand (str): The manufacturer string, used for directory traversal (e.g., 'santec', 'agilent').
+        model (str): The specific hardware model, corresponding to the TOML filename and target class name (e.g., 'TSL210').
+        address (str, optional): The physical transport routing address (e.g., 'GPIB0::20::INSTR', 'TCPIP::192.168.1.5::INSTR'). Defaults to "MOCK".
+        **kwargs: Arbitrary keyword arguments passed to the specific instrument constructor.
+
+    Returns:
+        BaseInstrument: A fully instantiated, connection-ready driver. This will be a specialized 
+        concrete subclass (e.g., `TSL210`), a topological multiplexer (`ChassisBase`), or the 
+        generic `BaseInstrument` fallback if no custom logic is required.
+
+    Raises:
+        ValueError: If the required TOML configuration cannot be found or parsed.
+        ImportError: If a specialized driver file exists but contains syntactical errors.
+        
+    Engineering Context:
+        To maintain an infinitely scalable, hardware-agnostic ecosystem, this factory prioritizes 
+        configuration-driven instantiation. If a specialized Python driver file (e.g., `santec.py`) 
+        is not found (`ModuleNotFoundError`), the system assumes the instrument is fully abstracted 
+        via its TOML and safely falls back to returning a generic `BaseInstrument`.
     """
-    # 1. Select Adapter based on address string
-    if "::" in address:
+    
+    # 1. Load the Configuration Model first (Hierarchical Schema Validation)
+    config = ConfigLoader.load_config(category, brand, model)
+
+    # 2. Transport Layer Abstraction
+    address_upper = address.upper()
+    if "MOCK" in address_upper:
+        adapter = MockAdapter(address)
+    elif "::" in address_upper:
         adapter = VISAAdapter(address)
     else:
-        # Default to TCP if it looks like an IP, otherwise Serial
-        adapter = TCPAdapter(address) 
+        adapter = TCPAdapter(address)
 
-    # 2. Dynamic Driver Discovery (Hierarchical Path)
-    # e.g., pylabcontrol_v2.instruments.lasers.santec.TSL210
-    module_path = f"pylabcontrol_v2.instruments.{category}.{brand.lower()}"
+    # 3. Topological Routing (The Mainframe Intercept)
+    if category.lower() == "mainframes":
+        # ChassisBase handles dynamic runtime discovery of its own slots internally
+        logger.info(f"Instantiating Mainframe Multiplexer for {brand.upper()} {model.upper()}")
+        return ChassisBase(config=config, adapter=adapter, **kwargs)
+
+    # 4. Dynamic Concrete Driver Discovery
+    module_path = f"pylabcontrol_v2.instruments.{category.lower()}.{brand.lower()}"
     class_name = model.upper()
 
     try:
+        # Attempt to load a vendor-specific override class (e.g., TSL210)
         module = importlib.import_module(module_path)
         InstrumentClass = getattr(module, class_name)
-        
-        # 3. Inject and Return
-        return InstrumentClass(adapter=adapter, **kwargs)
+        logger.debug(f"Vendor-specific class loaded: {class_name} from {module_path}")
+        return InstrumentClass(config=config, adapter=adapter, **kwargs)
 
-    except (ImportError, AttributeError) as e:
-        logger.error(f"Failed to load {brand} {model}: {e}")
+    except ModuleNotFoundError:
+        # ARCHITECTURAL SAFEGUARD: 
+        # No vendor-specific file exists. Rely entirely on the TOML + BaseInstrument.
+        logger.info(
+            f"No specific driver found at {module_path}. "
+            f"Falling back to universal BaseInstrument for {brand.upper()} {class_name}."
+        )
+        return BaseInstrument(config=config, adapter=adapter, **kwargs)
+        
+    except AttributeError:
+        # The file exists, but the specific class name (e.g., TSL210) is missing inside it.
+        logger.warning(
+            f"Module {module_path} found, but class {class_name} is missing. "
+            f"Falling back to universal BaseInstrument."
+        )
+        return BaseInstrument(config=config, adapter=adapter, **kwargs)
+        
+    except ImportError as e:
+        # CRITICAL FAILURE: The file exists but is broken (syntax error, circular import).
+        # We must NOT silently fail back to BaseInstrument here, as the user intended 
+        # custom logic to run but it crashed.
+        logger.error(f"Critical syntax or import error in {module_path}: {e}")
         raise
 
 ================================================================================
-### FILE: pylabcontrol\core\__init__.py ###
+### FILE: pylabcontrol_v2\core\models.py ###
+================================================================================
+
+from pydantic import BaseModel, Field
+from typing import Dict, Any, Optional
+
+class ParameterLimits(BaseModel):
+    """
+    Defines the physical bounding box for continuous numerical hardware parameters.
+
+    This schema is used exclusively by the `MetricParameter` descriptor to enforce 
+    hardware safety limits before values are processed by the transport layer.
+
+    Attributes:
+        min (float): The absolute minimum allowable value in the specified base unit.
+        max (float): The absolute maximum allowable value in the specified base unit.
+        unit (str): The exact physical unit string expected by the hardware (e.g., 'nm', 'dBm').
+
+    Engineering Context:
+        Acts as the immutable truth for hardware safety. By strictly defining bounds 
+        at the schema level, we prevent catastrophic operator errors (e.g., attempting 
+        to push 1000 W to a diode expecting 1000 mW). The `UnitManager` relies on the 
+        `unit` attribute here to perform accurate dimensional analysis.
+    """
+    min: float
+    max: float
+    unit: str
+
+
+class InstrumentConfig(BaseModel):
+    """
+    The master validation schema for PyLabControl V2 TOML configurations.
+
+    Every instrument, whether a standalone device, a topological multiplexer (Chassis), 
+    or a proxy driver (Module), must have its static TOML file parsed and validated 
+    through this Pydantic model before the framework will instantiate it.
+
+    Attributes:
+        brand (str): The vendor or manufacturer identifier (e.g., 'agilent', 'santec').
+        model (str): The specific model number of the physical hardware.
+        version (str): The internal schema version for backward compatibility tracking.
+        scpi_commands (Dict[str, str]): Abstract verb-to-SCPI mappings. Defines the exact 
+                                        string templates (which may include kwargs like 
+                                        `{slot}`) to be dispatched over the transport bus.
+        limits (Dict[str, ParameterLimits]): Maps continuous descriptors (e.g., 'wavelength') 
+                                             to their specific numerical safety boundaries.
+        validation (Dict[str, Any]): Defines allowable discrete strings/states (e.g., 
+                                     `["ON", "OFF", "1", "0"]`) for `InstrumentParameter` descriptors.
+        defaults (Dict[str, Any]): Safe initialization states pushed to the instrument upon connection.
+        metadata (Optional[Dict[str, Any]]): Topological directives utilized by the core routing 
+                                             logic (e.g., `is_mainframe = true`, `max_slots = 4`).
+
+    Engineering Context:
+        This model represents the exact border between the static text file and dynamic 
+        execution. By forcing TOML files through this strict validation layer, we guarantee 
+        that the Tier-3 Logic Core (`BaseInstrument` and `ChassisBase`) will never encounter 
+        a missing SCPI template or an undefined limit at runtime. If a user writes a bad 
+        TOML, the script crashes here instantly, rather than failing silently halfway through 
+        a 10-hour data acquisition sweep.
+    """
+    brand: str
+    model: str
+    version: str
+    
+    scpi_commands: Dict[str, str]
+    limits: Dict[str, ParameterLimits]
+    validation: Dict[str, Any]
+    defaults: Dict[str, Any]
+    
+    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
+
+================================================================================
+### FILE: pylabcontrol_v2\core\__init__.py ###
 ================================================================================
 
 
 
 ================================================================================
-### FILE: pylabcontrol\instruments\lasers\santec.py ###
+### FILE: pylabcontrol_v2\instruments\lasers\agilent.py ###
 ================================================================================
 
-from ...core.base_instrument import BaseInstrument
-from ...core.descriptors import MetricParameter, InstrumentParameter
 
-class TSL210(BaseInstrument):
-    brand = "Santec"
-    model = "TSL210"
 
-    # --- Nouns (Descriptors) ---
+================================================================================
+### FILE: pylabcontrol_v2\instruments\lasers\santec.py ###
+================================================================================
+
+import re
+import time
+from pylabcontrol_v2.instruments.lasers import TLS
+
+class TSL210(TLS):
+    def __init__(self, config, adapter):
+        super().__init__(config, adapter)
+        self.adapter.inst.read_termination = '\r\n'
+        self.adapter.inst.write_termination = '\r\n'
+        
+        self.adapter.write("SU0")
+        self.adapter.write("HD0")
+        
+        # Internal trackers for the generic wait method
+        self._target_wl = None
+        self._target_pwr = None
+        self._target_output = None
+
+    def wait_until_ready(self, timeout=15.0, tolerance_nm=0.005, tolerance_db=0.05):
+        """
+        Generic handshake: Checks all parameters against their last set targets.
+        Returns True when settled, False on timeout.
+        """
+        start_time = time.time()
+        self.log.info(f"[{self.instrument_id}] Waiting for hardware to settle...")
+
+        while (time.time() - start_time) < timeout:
+            # Check 1: Wavelength (Mechanical)
+            if self._target_wl is not None:
+                current_wl = self.wavelength.magnitude
+                if abs(current_wl - self._target_wl) > tolerance_nm:
+                    time.sleep(0.2)
+                    continue
+
+            # Check 2: Power (APC Loop)
+            if self._target_pwr is not None:
+                current_pwr = self.power.magnitude
+                if abs(current_pwr - self._target_pwr) > tolerance_db:
+                    time.sleep(0.1)
+                    continue
+
+            # Check 3: Output (Relay/Protection Circuit)
+            if self._target_output is not None:
+                if self.output != self._target_output:
+                    time.sleep(0.2)
+                    continue
+
+            # If we reach here, all set targets are matched
+            self.log.info(f"[{self.instrument_id}] Hardware READY.")
+            return True
+
+        self.log.warning(f"[{self.instrument_id}] Wait timed out!")
+        return False
+
+    # --- Properties with Target Tracking ---
+
+    @property
+    def wavelength(self):
+        res = self.adapter.query(self.config.scpi_commands.get("get_wavelength"))
+        return self.validate_level(self._clean_response(res), "nm", context="wavelength")
+
+    @wavelength.setter
+    def wavelength(self, value):
+        qty = self.validate_level(value, "nm", context="wavelength")
+        self._target_wl = qty.magnitude # Store intent
+        self.adapter.write(f"WA {self._target_wl:.3f}")
+
+    @property
+    def power(self):
+        res = self.adapter.query(self.config.scpi_commands.get("get_power"))
+        return self.validate_level(self._clean_response(res), "dBm", context="power")
+
+    @power.setter
+    def power(self, value):
+        qty = self.validate_level(value, "dBm", context="power")
+        self._target_pwr = qty.magnitude # Store intent
+        self.adapter.write("AF") 
+        self.adapter.write(f"OP {self._target_pwr:.2f}")
+
+    @property
+    def output(self):
+        res = self.adapter.query("SU").strip()
+        return "ON" if res.startswith("-") else "OFF"
+
+    @output.setter
+    def output(self, value):
+        state = self.validate_state(value, ["ON", "OFF"], context="output")
+        self._target_output = state # Store intent
+        cmd = "LO" if state == "ON" else "LF"
+        self.adapter.write(cmd)
+
+    def _clean_response(self, raw_res):
+        clean = re.sub(r'[^0-9.\-]', '', raw_res)
+        if clean.count('.') > 1:
+            return clean.split('.')[-1]
+        return clean
+
+================================================================================
+### FILE: pylabcontrol_v2\instruments\lasers\__init__.py ###
+================================================================================
+
+from pylabcontrol_v2.core.base_instrument import BaseInstrument
+from pylabcontrol_v2.core.descriptors import MetricParameter, InstrumentParameter
+
+class TLS(BaseInstrument):
+    """
+    Category Base for Tunable Laser Sources.
+    Defines the universal 'Nouns' (Parameters) and 'Verbs' (Methods) 
+    that every laser in PyLabControl must implement.
+    """
+    
+    # --- Universal Nouns (Descriptors) ---
+    # These use generic limits_keys that every laser TOML must include.
     wavelength = MetricParameter(
-        scpi_set="WA", scpi_get="WA?", unit="nm", limits_key="wavelength"
+        scpi_set="set_wavelength", 
+        scpi_get="get_wavelength", 
+        unit="nm", 
+        limits_key="wavelength"
     )
     
     power = MetricParameter(
-        scpi_set="LP", scpi_get="LP?", unit="dBm", limits_key="power"
+        scpi_set="set_power", 
+        scpi_get="get_power", 
+        unit="dBm", 
+        limits_key="power"
     )
 
     output = InstrumentParameter(
-        scpi_set="LO", scpi_get="LO?", allowed=["ON", "OFF", "1", "0"]
+        scpi_set="set_output_status", 
+        scpi_get="get_output_status", 
+        allowed=["ON", "OFF", "1", "0"]
     )
 
-    # --- Verbs (Methods) ---
-    def auto_tune(self):
-        """A Verb: This is an action, not a state."""
-        self.adapter.write("AT")
+    # --- Universal Verbs (Methods) ---
+    def wait_for_idle(self):
+        """Standard blocking call to wait for laser operations to finish."""
+        return self.wait() # Uses IEEE 488.2 *WAI from core base
 
 ================================================================================
-### FILE: pylabcontrol\utils\config_loader.py ###
+### FILE: pylabcontrol_v2\utils\config_loader.py ###
 ================================================================================
 
 import os
 import toml
+from pylabcontrol_v2.core.models import InstrumentConfig
 
 class ConfigLoader:
     """
-    V2 ConfigLoader: Decoupled from the instruments source tree.
-    Focuses on retrieving hardware maps from the root /configs directory.
+    V2 ConfigLoader: Navigates a hierarchical config tree.
+    Path: configs/{category}/{brand}/{model}.toml
     """
-    # Point to the root configs folder, not the source code
-    CONFIG_ROOT = os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "configs")
+    # Root configs directory
+    CONFIG_ROOT = os.path.normpath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "configs")
+    )
 
     @staticmethod
-    def load_config(category: str, model: str) -> dict:
+    def load_config(category: str, brand: str, model: str) -> InstrumentConfig:
         """
-        Loads a TOML config from the hierarchical /configs directory.
-        Path: configs/<category>/<model>.toml
+        Loads and validates a TOML config from the brand-specific subfolder.
         """
-        config_path = os.path.join(ConfigLoader.CONFIG_ROOT, category.lower(), f"{model.lower()}.toml")
+        # New hierarchical path construction
+        config_path = os.path.join(
+            ConfigLoader.CONFIG_ROOT, 
+            category.lower(), 
+            brand.lower(), 
+            f"{model.lower()}.toml"
+        )
 
         if not os.path.exists(config_path):
-            raise FileNotFoundError(f"Hardware config not found: {config_path}")
+            raise FileNotFoundError(f"Hardware config not found at: {config_path}")
 
         try:
-            config = toml.load(config_path)
+            raw_data = toml.load(config_path)
+            # Pydantic hydrates and validates the raw dictionary [cite: 62]
+            return InstrumentConfig(**raw_data)
         except toml.TomlDecodeError as e:
             raise ValueError(f"TOML Syntax Error in {model}: {e}")
-
-        # V2 Mandatory Sections
-        required_sections = ['scpi_commands', 'limits', 'defaults', 'validation']
-        for section in required_sections:
-            if section not in config:
-                raise ValueError(f"Missing mandatory section [{section}] in {model}.toml")
-
-        return config
+        except Exception as e:
+            raise ValueError(f"Configuration error for {brand} {model}: {e}")
 
     @staticmethod
     def format_command(template: str, **kwargs) -> str:
@@ -571,7 +1821,7 @@ class ConfigLoader:
             raise ValueError(f"Missing expected SCPI parameter: {e}")
 
 ================================================================================
-### FILE: pylabcontrol\utils\decorators.py ###
+### FILE: pylabcontrol_v2\utils\decorators.py ###
 ================================================================================
 
 import functools
@@ -599,103 +1849,170 @@ def instrument_logger(func):
     return wrapper
 
 ================================================================================
-### FILE: pylabcontrol\utils\logging_manager.py ###
+### FILE: pylabcontrol_v2\utils\logging_manager.py ###
 ================================================================================
 
 import logging
+import sys
 import queue
-from logging.handlers import QueueHandler
+from typing import Optional
 
 class LogTiers:
-    """Standardized tiers for PyLabControl logging."""
+    """Standardized tiers for PyLabControl V2 logging."""
+    # Ensure these match your package name exactly
     TRANSPORT = "pylabcontrol_v2.transport"   # Raw SCPI/Adapter traffic
     VALIDATION = "pylabcontrol_v2.validation" # Descriptor/Unit logic
-    ACTION = "pylabcontrol_v2.action"       # High-level instrument methods
+    ACTION = "pylabcontrol_v2.action"         # High-level instrument methods
 
 class GUILogHandler(logging.Handler):
     """
     Thread-safe handler that pushes logs into a Queue.
-    The GUI will poll this queue to update its display.
+    The GUI polls this queue to update its display.
     """
     def __init__(self, log_queue: queue.Queue):
         super().__init__()
         self.log_queue = log_queue
 
     def emit(self, record):
-        # We store the record as a dict for easy GUI parsing
-        self.log_queue.put({
-            "time": self.formatTime(record),
-            "level": record.levelname,
-            "tier": record.name,
-            "msg": record.getMessage(),
-            "inst_id": getattr(record, "inst_id", "System")
-        })
+        try:
+            # Format the message using the attached formatter
+            msg = self.format(record)
+            self.log_queue.put({
+                "time": record.created,
+                "level": record.levelname,
+                "tier": record.name,
+                "msg": record.getMessage(),
+                "formatted": msg,
+                "inst_id": getattr(record, "inst_id", "System")
+            })
+        except Exception:
+            self.handleError(record)
 
-def setup_logging(level=logging.DEBUG, log_file="pylabcontrol_v2.log"):
-    """Initializes the hierarchical logging system."""
-    formatter = logging.Formatter('%(asctime)s | %(name)-20s | %(levelname)-8s | %(message)s')
+def setup_logging(level=logging.DEBUG, log_file="pylabcontrol_v2.log", log_queue: Optional[queue.Queue] = None):
+    """Initializes the hierarchical logging system for the v2 namespace."""
     
-    # Root Logger
-    root = logging.getLogger("pylabcontrol")
-    root.setLevel(level)
+    # 1. Get the TOP LEVEL logger for the framework
+    # Any log sent to "pylabcontrol_v2.anything" will flow through this
+    framework_log = logging.getLogger("pylabcontrol_v2")
+    framework_log.setLevel(level)
+    
+    # Clear existing handlers to prevent duplicate lines in VS Code
+    if framework_log.hasHandlers():
+        framework_log.handlers.clear()
 
-    # File Handler
+    # 2. Formatter: Time | Context (Tier) | Level | Message
+    formatter = logging.Formatter('%(asctime)s | %(name)-25s | %(levelname)-8s | %(message)s', 
+                                  datefmt='%H:%M:%S')
+
+    # 3. Stream Handler (The "Terminal" Pipe)
+    sh = logging.StreamHandler(sys.stdout)
+    sh.setFormatter(formatter)
+    framework_log.addHandler(sh)
+
+    # 4. File Handler (The "Black Box" Record)
     fh = logging.FileHandler(log_file)
     fh.setFormatter(formatter)
-    root.addHandler(fh)
+    framework_log.addHandler(fh)
 
-    # Stream Handler (Console)
-    sh = logging.StreamHandler()
-    sh.setFormatter(formatter)
-    root.addHandler(sh)
+    # 5. Optional GUI Handler (The "Screen" Pipe)
+    if log_queue is not None:
+        gh = GUILogHandler(log_queue)
+        gh.setFormatter(formatter)
+        framework_log.addHandler(gh)
 
-    return root
+    framework_log.info(f"V2 Logging Initialized at level {logging.getLevelName(level)}")
+    return framework_log
 
 ================================================================================
-### FILE: pylabcontrol\utils\unit_manager.py ###
+### FILE: pylabcontrol_v2\utils\unit_manager.py ###
 ================================================================================
 
-import pint
-from typing import Union
+import math
+import re
+from pint import UnitRegistry, Quantity
+
+import math
+import re
+from pint import UnitRegistry, Quantity
 
 class UnitManager:
-    """
-    The Single Source of Truth for all dimensional analysis.
-    Wraps the 'pint' library for pylabcontrol_v2.
-    """
     def __init__(self):
-        self.u = pint.UnitRegistry()
-        # Define common lab aliases if needed
-        self.u.define('micro_watt = 1e-6 * watt = uW')
-        self.u.define('nano_meter = 1e-9 * meter = nm')
+        # autoconvert helps dBm play nicely
+        self.ureg = UnitRegistry(autoconvert_offset_to_baseunit=True)
+        self.ureg.formatter.default_format = ".4f"
 
-    def normalise_unit_input(self, value: Union[float, int, str, pint.Quantity], 
-                             target_unit: str, context: str = "") -> pint.Quantity:
+    def normalise_unit_input(self, val, target_unit, context="") -> Quantity:
         """
-        Converts any input (string with unit, float, or Quantity) 
-        into a standardized pint.Quantity in the target unit.
+        Standardizes input into a Pint Quantity and converts to the target unit.
+        Supports naked numbers (assumes target_unit) and strings with/without spaces.
         """
         try:
-            if isinstance(value, (int, float)):
-                # Assume raw numbers are already in target units if not specified
-                quantity = value * self.u(target_unit)
-            elif isinstance(value, str):
-                quantity = self.u(value)
-            else:
-                quantity = value
+            # Case A: Input is already a Pint Quantity (e.g., from another calculation)
+            if isinstance(val, Quantity):
+                return val.to(target_unit)
 
-            # Convert to target unit (e.g., from '1550nm' to '1.55um' if requested)
-            return quantity.to(target_unit)
-        
+            # Case B: Input is a naked number (int or float)
+            # laser.wavelength = 1550 -> becomes 1550 nm
+            if isinstance(val, (int, float)):
+                return self.ureg.Quantity(val, target_unit)
+
+            # Case C: Input is a string 
+            # Supports "1.55 um", "1550nm", "1550", "5.0 dBm"
+            if isinstance(val, str):
+                # Regex extracts the number part and the unit part separately
+                # mag_match handles signs, decimals, and scientific notation
+                match = re.match(r"^\s*([+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\s*(.*)$", val)
+                
+                if not match:
+                    # Fallback: Let Pint try to parse if regex fails (e.g. "speed_of_light")
+                    q = self.ureg.Quantity(val)
+                else:
+                    mag_str, unit_str = match.groups()
+                    mag = float(mag_str)
+                    u_str = unit_str.strip()
+
+                    if u_str:
+                        # User provided a unit (e.g., "um" or "dBm")
+                        # Using the (value, unit) constructor avoids the OffsetUnitCalculusError
+                        q = self.ureg.Quantity(mag, u_str)
+                    else:
+                        # No unit in string (e.g., "1550") -> use the target_unit
+                        q = self.ureg.Quantity(mag, target_unit)
+
+                # Final step: Convert to target unit (e.g., um -> nm)
+                return q.to(target_unit)
+
+            raise TypeError(f"Unsupported input type {type(val)}")
+
         except Exception as e:
+            # Re-wrap the error with context so the logs show WHICH property failed
             raise ValueError(f"Unit conversion error in {context}: {e}")
 
-# Global singleton instances
+    # --- Physical Helpers (The useful parts of your V1) ---
+
+    def freq_to_wave(self, freq_qty: Quantity) -> Quantity:
+        """Convert Frequency (Hz) to Wavelength (m)."""
+        c = self.ureg.speed_of_light
+        return (c / freq_qty).to('nm')
+
+    def dbm_to_mw(self, dbm_val: float) -> Quantity:
+        """Standard lab conversion: dBm -> mW."""
+        mw_val = 10**(dbm_val / 10)
+        return self.ureg.Quantity(mw_val, 'mW')
+
+    def mw_to_dbm(self, mw_qty: Quantity) -> Quantity:
+        """Standard lab conversion: mW -> dBm."""
+        mag = mw_qty.to('mW').magnitude
+        return self.ureg.Quantity(10 * math.log10(mag), 'dBm')
+
+# Global Instance for logic
 um = UnitManager()
-u = um.u
+
+# Global Alias for the registry (Required by base_instrument.py and others)
+u = um.ureg
 
 ================================================================================
-### FILE: pylabcontrol\utils\__init__.py ###
+### FILE: pylabcontrol_v2\utils\__init__.py ###
 ================================================================================
 
 
@@ -719,3 +2036,158 @@ instr = BaseInstrument(adapter=mock_dev)
 print(f"Testing IDN: {instr.idn()}")
 instr.reset()
 print("Phase 1: Connectivity, Unit Management, and Adapter Injection Verified.")
+
+================================================================================
+### FILE: scripts\test_laser_connection.py ###
+================================================================================
+
+import logging
+import time
+from pylabcontrol_v2.core.factory import load_instrument
+from pylabcontrol_v2.utils.logging_manager import setup_logging
+
+setup_logging(level=logging.DEBUG)
+log = logging.getLogger("pylabcontrol_v2.test")
+
+def run_full_test():
+    log.info("=== STARTING RAW HARDWARE CONTROL TEST ===")
+    laser = None
+    
+    try:
+        laser = load_instrument(
+            category="lasers", 
+            brand="santec", 
+            model="tsl210", 
+            address="GPIB0::1::INSTR"
+        )
+        
+        log.info(f"IDN Response: {laser.idn()}")
+
+        # ---------------------------------------------------------
+        # 1. EXPLICIT INITIALIZATION (User takes responsibility)
+        # ---------------------------------------------------------
+        log.info("Action: Enabling Laser Output (Injecting Base Current)")
+        laser.output = "ON"
+        time.sleep(1.0) # Wait for internal relay [cite: 960]
+        
+        # ---------------------------------------------------------
+        # 2. POWER CONTROL IN APC MODE
+        # ---------------------------------------------------------
+        log.info("Action: Forcing APC Control Mode")
+        laser.control_mode = "APC"
+        time.sleep(0.1)
+
+        log.info("Action: Setting Target Power to 5.0 dBm")
+        laser.power = -2
+        laser.wait_until_ready()
+        log.info(f"Verification: Current Power is {laser.power}")
+
+        # ---------------------------------------------------------
+        # 3. WAVELENGTH TUNING
+        # ---------------------------------------------------------
+        # Try any of these: 1555, "1555nm", "1.555 um"
+        target_wl = 1580 
+        log.info(f"Action: Setting Wavelength to {target_wl}")
+        laser.wavelength = target_wl
+        laser.wait_until_ready()
+        log.debug(f"Current Wavelength: {laser.wavelength:.3f} nm")
+        
+
+        '''
+        # ---------------------------------------------------------
+        # 4. SAFE SHUTDOWN WITH POLLING
+        # ---------------------------------------------------------
+        log.info("Action: Sending Command to Turn Output OFF")
+        laser.output = "OFF"
+        
+        # Poll the laser every 0.5 seconds until the protection circuit finishes discharging
+        timeout = 10.0 # Maximum seconds to wait
+        elapsed = 0.0
+        
+        while elapsed < timeout:
+            time.sleep(0.5)
+            elapsed += 0.5
+            current_status = laser.output
+            
+            if current_status == "OFF":
+                log.info(f"Verification: Laser successfully powered down after {elapsed} seconds.")
+                break
+            else:
+                log.debug(f"Waiting... Laser is still {current_status} at {elapsed}s")
+                
+        if laser.output == "ON":
+            log.warning("Timeout reached! Laser is still reporting ON.")
+        '''
+        log.info("=== ALL TESTS PASSED SUCCESSFULLY ===")
+
+    except Exception as e:
+        log.error(f"CRITICAL TEST FAILURE: {e}", exc_info=True)
+    finally:
+        if laser:
+            # Ensure the laser is off before closing the connection
+            laser.output = "OFF" 
+            laser.close()
+            log.info("GPIB Resource released safely.")
+
+if __name__ == "__main__":
+    run_full_test()
+
+================================================================================
+### FILE: scripts\test_units.py ###
+================================================================================
+
+from pylabcontrol_v2.utils.unit_manager import um
+
+def test_unit_logic():
+    print("--- Testing Unit Manager Robustness ---")
+    
+    # Test 1: String with units (User Input)
+    q1 = um.normalise_unit_input("1.55um", "nm")
+    print(f"User Input (1.55um) -> {q1}") # Should be 1550nm
+
+    # Test 2: Naked String (Hardware Output)
+    # This is what crashed your script!
+    q2 = um.normalise_unit_input("1550.0", "nm")
+    print(f"Hardware Output (1550.0) -> {q2}") # Should be 1550nm
+
+    # Test 3: Raw Float
+    q3 = um.normalise_unit_input(1550.0, "nm")
+    print(f"Raw Float (1550.0) -> {q3}") # Should be 1550nm
+
+    print("--- ALL UNIT TESTS PASSED ---")
+
+if __name__ == "__main__":
+    test_unit_logic()
+
+================================================================================
+### FILE: scripts\verify_pydantic_flow.py ###
+================================================================================
+
+from pylabcontrol_v2.utils.config_loader import ConfigLoader
+from pylabcontrol_v2.adapters.mock_adapter import MockAdapter
+from pylabcontrol_v2.core.base_instrument import BaseInstrument
+from pylabcontrol_v2.utils.logging_manager import setup_logging
+
+setup_logging()
+
+def verify():
+    print("--- Verifying Hierarchical Pydantic Integration ---")
+    
+    try:
+        # FIXED: Added the brand "santec" as the second argument
+        conf = ConfigLoader.load_config("lasers", "santec", "tsl210")
+        print(f"PASS: Config Loaded for {conf.brand} {conf.model}")
+    except Exception as e:
+        print(f"FAIL: Config Loader error: {e}")
+        return
+
+    adapter = MockAdapter()
+    instr = BaseInstrument(adapter=adapter, config=conf)
+    
+    # Test dot-access (Pydantic)
+    print(f"PASS: Instrument model confirmed as {instr.config.model}")
+    
+    # Test standard command fallback
+    print(f"PASS: IDN Command used: {instr.config.scpi_commands.get('idn', '*IDN?')}")
+
+if __name__ == "__main__": verify()
