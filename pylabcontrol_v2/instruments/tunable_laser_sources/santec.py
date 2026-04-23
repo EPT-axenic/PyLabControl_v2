@@ -1,6 +1,6 @@
 import re
 import time
-from pylabcontrol_v2.instruments.lasers import TLS
+from pylabcontrol_v2.instruments.tunable_laser_sources import TLS
 
 class TSL210(TLS):
     def __init__(self, config, adapter):

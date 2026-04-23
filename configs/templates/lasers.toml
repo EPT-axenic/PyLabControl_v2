@@ -90,7 +90,7 @@ channel_count = 1            # Defines the bounds for ChannelBase hydration.
 # If the instrument requires complex Python methods or custom polling loops,
 # define the path to its dedicated Proxy Class here. 
 # If omitted, the framework safely defaults to `BaseInstrument` (or `ModuleBase`).
-driver_category = "lasers"               # Directory: instruments/lasers/
+driver_category = "tunable_laser_c=source"               # Directory: instruments/lasers/
 driver_file = "template_vendor"          # File: template_vendor.py
 driver_class = "TemplateVendorTLS"       # Class: class TemplateVendorTLS(BaseInstrument):
 
@@ -99,6 +99,10 @@ driver_class = "TemplateVendorTLS"       # Class: class TemplateVendorTLS(BaseIn
 # ------------------------------------------------------------------------------
 domain = "photonics"
 classification = "source"
+
+# ------------------------------------------------------------------------------
+# HARDWARE SPECIFIC (Consumed by UI and Script Logic)
+# ------------------------------------------------------------------------------
 has_attenuator = false
 is_tunable = true
 requires_handshake = true    # Flags if .wait_until_ready() is mandatory after parameter changes.
