@@ -1,58 +1,78 @@
 # ==============================================================================
-# PYLABCONTROL V2 - TLS MASTER TEMPLATE
+# PYLABCONTROL V2 - SANTEC TSL-210 CONFIGURATION
 # ==============================================================================
-# Description: Universal configuration schema for Tunable Laser Sources.
-# Instructions: Copy this file, rename to the specific model, and replace 
-# the SCPI commands with the hardware-specific syntax.
+# Description: Specific configuration for the Santec TSL-210 Tunable Laser.
+# Note: Wavelength, Power, and Output are intercepted by the explicit proxy 
+# driver to support hardware polling and specific string quirks.
 # ==============================================================================
 
-brand = "TEMPLATE"
-model = "TLS_GENERIC"
-version = "2.2.0"
+brand = "Santec"
+model = "TSL210"
+version = "2.1.0"
 
 [scpi_commands]
 # ------------------------------------------------------------------------------
 # 1. IEEE 488.2 STANDARD OVERRIDES
 # ------------------------------------------------------------------------------
-idn = "*IDN?"
-opc_query = "*OPC?"
+idn = "ID?"
 
 # ==============================================================================
 # CORE FUNCTIONS (MANDATORY INTERFACE FOR TLS BASE)
 # ==============================================================================
-set_wavelength    = "SOUR:WAV {value}"
-get_wavelength    = "SOUR:WAV?"
-set_power         = "SOUR:POW {value}"
-get_power         = "SOUR:POW?"
-set_output_status = "OUTP:STAT {value}"
-get_output_status = "OUTP:STAT?"
+set_wavelength = "WA {value}"
+get_wavelength = "WA?"
+set_power = "OP {value}"
+get_power = "OP?"
+set_output_status = "L{value}" # L+O = ON, L+F = OFF
+get_output_status = "SU"
 
 # ------------------------------------------------------------------------------
-# ADDITIONAL FUNCTIONS (OPTIONAL)
+# ADDITIONAL FUNCTIONS
 # ------------------------------------------------------------------------------
-# e.g., set_sweep_speed = "SOUR:WAV:SWE:SPE {value}"
+set_ld_current = "CU {value}"
+get_ld_current = "CU?"
+set_ld_temp = "TL {value}"
+get_ld_temp = "TL?"
+set_acc_mode = "AO"            # ACC Mode (Constant Current)
+set_apc_mode = "AF"            # APC Mode (Constant Power)
+set_coherence_on = "CO"
+set_coherence_off = "CF"
+set_fine_tuning = "FT {value}"
+get_fine_tuning = "FT?"
+set_attenuator = "AT {value}"
+get_attenuator = "AT?"
 
 
 [limits]
 # ------------------------------------------------------------------------------
-# CORE PHYSICAL BOUNDARIES
+# PHYSICAL BOUNDARIES
 # ------------------------------------------------------------------------------
 [limits.wavelength]
-min = 1500.0
-max = 1600.0
+min = 1260.0
+max = 1630.0
 unit = "nm"
 
 [limits.power]
-min = -20.0
-max = 10.0
+min = -10.0
+max = 13.0
 unit = "dBm"
 
+[limits.ld_current]
+min = 0.0
+max = 200.0 # Standard diode safety
+unit = "mA"
+
+[limits.fine_tuning]
+min = -100.0
+max = 100.0
+unit = "percent" # Maps to +/- 100 range in manual
 
 [validation]
 # ------------------------------------------------------------------------------
-# DISCRETE STATE LISTS
+# DISCRETE STATE LISTS (Enforced by InstrumentParameter Descriptors)
 # ------------------------------------------------------------------------------
-output_modes = ["ON", "OFF", "1", "0"]
+output_modes = ["ON", "OFF"]
+control_modes = ["APC", "ACC"]
 
 
 [defaults]
@@ -62,6 +82,7 @@ output_modes = ["ON", "OFF", "1", "0"]
 wavelength = "1550 nm"
 power = "0 dBm"
 output = "OFF"
+control_mode = "APC"
 
 
 [metadata]
@@ -76,12 +97,17 @@ channel_count = 1
 # ------------------------------------------------------------------------------
 # EXPLICIT PROXY ROUTING
 # ------------------------------------------------------------------------------
-driver_category = "tunable_laser_sources"               
-# driver_file = "vendor_name"              
-# driver_class = "ClassName"         
+# Explicitly maps to pylabcontrol_v2/instruments/lasers/santec.py -> class TSL210
+driver_category = "lasers"               
+driver_file = "santec"              
+driver_class = "TSL210"         
 
 # ------------------------------------------------------------------------------
 # CAPABILITY FLAGS (Consumed by UI and Script Logic)
 # ------------------------------------------------------------------------------
 domain = "photonics"
 classification = "source"
+
+# ------------------------------------------------------------------------------
+# HARDWARE SPECIFIC (Consumed by UI and Script Logic)
+# ------------------------------------------------------------------------------

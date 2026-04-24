@@ -1,0 +1,49 @@
+# ==============================================================================
+# PYLABCONTROL V2 - NEWPORT NP-1830C CONFIGURATION
+# ==============================================================================
+
+brand = "Newport"
+model = "NP_1830C"
+version = "2.0.0"
+
+[scpi_commands]
+# IEEE 488.2 Overrides (The 1830C lacks standard queries)
+idn = "N/A"
+reset = "N/A"
+
+# OPM Core Verbs
+get_power          = "D?"
+set_wavelength     = "W{value}"
+get_wavelength     = "W?"
+set_power_unit     = "U{value}"  # Quirk: Requires integer map (1=W, 2=dB, 3=dBm)
+get_power_unit     = "U?"
+set_averaging_time = "F{value}"  # Quirk: Requires integer map (1=Slow, 2=Med, 3=Fast)
+get_averaging_time = "F?"
+zero_channel       = "O"
+
+[limits]
+[limits.wavelength]
+min = 190.0
+max = 1800.0
+unit = "nm"
+
+[limits.averaging_time]
+min = 0.01   # Representing "Fast"
+max = 10.0   # Representing "Slow"
+unit = "s"
+
+[validation]
+power_units = ["W", "DBM", "DB"]
+
+[defaults]
+wavelength = "1550 nm"
+power_unit = "W"
+
+[metadata]
+# Explicit proxy routing prevents the factory from falling back to the generic base
+driver_category = "optical_power_meters"
+driver_file = "np_1830c"
+driver_class = "Newport1830C"
+domain = "photonics"
+classification = "sensor"
+is_module = false
