@@ -1,0 +1,108 @@
+# ==============================================================================
+# PYLABCONTROL V2 - SMU MASTER TEMPLATE
+# ==============================================================================
+# Description: Universal configuration schema for Source Measure Units.
+# Note: Features Dual-State Injection. Commands with {s_func} rely on the Source 
+# Mode, while {m_func} rely on the Measure Mode.
+# ==============================================================================
+
+brand = "TEMPLATE"
+model = "SMU_GENERIC"
+version = "2.2.0"
+
+[scpi_commands]
+reset = "*RST"
+idn = "*IDN?"
+
+# ==============================================================================
+# CORE FUNCTIONS (MANDATORY FOR SMU BASE)
+# ==============================================================================
+# --- GLOBAL SETTINGS ---
+set_source_mode = "SOUR:FUNC {value}"
+get_source_mode = "SOUR:FUNC?"
+set_measure_mode = "SENS:FUNC \"{value}\""
+get_measure_mode = "SENS:FUNC?"
+set_output_status = "OUTP:STAT {value}"
+get_output_status = "OUTP:STAT?"
+set_sense_mode = "SYST:RSEN {value}" # 2-wire vs 4-wire (Remote Sense)
+get_sense_mode = "SYST:RSEN?"
+set_sample_count = "SAMP:COUN {value}"
+get_sample_count = "SAMP:COUN?"
+
+# --- SOURCE-AWARE SETTINGS (Requires {s_func} injection) ---
+set_source_level = "SOUR:{s_func}:LEV {value}"
+get_source_level = "SOUR:{s_func}:LEV?"
+set_source_range = "SOUR:{s_func}:RANG {value}"
+get_source_range = "SOUR:{s_func}:RANG?"
+# Note: Compliance uses {c_func}, which is the INVERSE of the source mode
+set_compliance = "SENS:{c_func}:PROT {value}"
+get_compliance = "SENS:{c_func}:PROT?"
+
+# --- MEASURE-AWARE SETTINGS (Requires {m_func} injection) ---
+set_measure_range = "SENS:{m_func}:RANG {value}"
+get_measure_range = "SENS:{m_func}:RANG?"
+set_nplc = "SENS:{m_func}:NPLC {value}"
+get_nplc = "SENS:{m_func}:NPLC?"
+
+# --- EXECUTION ACTIONS ---
+read = "READ?"
+initiate = "INIT"
+fetch = "FETC?"
+
+
+[limits]
+[limits.sample_count]
+min = 1
+max = 1000000
+unit = ""
+
+
+[validation]
+# ------------------------------------------------------------------------------
+# 1. DISCRETE MODES
+# ------------------------------------------------------------------------------
+source_modes = ["VOLT", "CURR"]
+measure_modes = ["VOLT:DC", "CURR:DC", "RES"]
+sense_modes = ["ON", "OFF", "1", "0"] # ON = 4-wire, OFF = 2-wire
+output_modes = ["ON", "OFF", "1", "0"]
+
+# ------------------------------------------------------------------------------
+# 2. PARAMETER FENCING (The Gatekeeper Lists)
+# ------------------------------------------------------------------------------
+# Source Gatekeepers
+valid_source_volt_parameters = ["source_level", "source_range", "compliance"]
+valid_source_curr_parameters = ["source_level", "source_range", "compliance"]
+
+# Measure Gatekeepers
+valid_measure_volt_dc_parameters = ["measure_range", "nplc"]
+valid_measure_curr_dc_parameters = ["measure_range", "nplc"]
+valid_measure_res_parameters = ["measure_range", "nplc"]
+
+# ------------------------------------------------------------------------------
+# 3. VALUE FENCING (Dynamic Physical Limits)
+# ------------------------------------------------------------------------------
+# Voltages
+valid_source_volt_ranges = ["0.2", "2", "20", "200"]
+valid_measure_volt_dc_ranges = ["0.2", "2", "20", "200"]
+
+# Currents
+valid_source_curr_ranges = ["10E-6", "100E-6", "1E-3", "10E-3", "100E-3", "1"]
+valid_measure_curr_dc_ranges = ["10E-6", "100E-6", "1E-3", "10E-3", "100E-3", "1"]
+
+# NPLC
+valid_nplc = ["0.01", "0.1", "1", "10"]
+
+
+[defaults]
+source_mode = "VOLT"
+measure_mode = "CURR:DC"
+output = "OFF"
+sample_count = "1"
+
+
+[metadata]
+is_mainframe = false         
+is_module = false            
+driver_category = "source_measure_units"               
+domain = "electrical"
+classification = "hybrid"

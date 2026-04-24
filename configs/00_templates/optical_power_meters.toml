@@ -1,0 +1,93 @@
+# ==============================================================================
+# PYLABCONTROL V2 - OPTICAL POWER METER MASTER TEMPLATE
+# ==============================================================================
+# Description: Universal configuration schema for standard IEEE 488.2 OPMs.
+# ==============================================================================
+
+brand = "TEMPLATE"
+model = "OPM_GENERIC"
+version = "2.2.0"
+
+[scpi_commands]
+reset = "*RST"
+idn = "*IDN?"
+opc_query = "*OPC?"
+
+# ==============================================================================
+# CORE FUNCTIONS (MANDATORY FOR OPM BASE)
+# ==============================================================================
+# --- MEASUREMENT NOUNS ---
+set_wavelength = "SENS:POW:WAV {value}"
+get_wavelength = "SENS:POW:WAV?"
+set_averaging_time = "SENS:POW:ATIM {value}"
+get_averaging_time = "SENS:POW:ATIM?"
+set_sample_count = "SAMP:COUN {value}"
+get_sample_count = "SAMP:COUN?"
+
+# --- CONFIGURATION ADJECTIVES ---
+set_power_unit = "SENS:POW:UNIT {value}"
+get_power_unit = "SENS:POW:UNIT?"
+set_auto_range = "SENS:POW:RANG:AUTO {value}"
+get_auto_range = "SENS:POW:RANG:AUTO?"
+set_range = "SENS:POW:RANG {value}"
+get_range = "SENS:POW:RANG?"
+
+# --- HARDWARE ACTIONS ---
+zero = "CAL:ZERO:AUTO ONCE"
+
+# --- THE DATA ACQUISITION TRINITY ---
+read = "READ?"
+initiate = "INIT"
+fetch = "FETC?"
+
+# ==============================================================================
+# ADDITIONAL FUNCTIONS (OPTIONAL)
+# ==============================================================================
+set_correction_factor = "SENS:CORR {value}"
+get_correction_factor = "SENS:CORR?"
+set_reference = "SENS:POW:REF:STAT ONCE"
+
+
+[limits]
+[limits.wavelength]
+min = 400.0
+max = 1700.0
+unit = "nm"
+
+[limits.averaging_time]
+min = 0.0001
+max = 10.0
+unit = "s"
+
+[limits.sample_count]
+min = 1
+max = 1000000
+unit = ""
+
+[limits.correction_factor]
+min = -200.0
+max = 200.0
+unit = "dB"
+
+
+[validation]
+range_modes = ["MIN", "MAX", "10NW", "1UW", "100UW", "10MW"] # Hardware specific
+power_units = ["W", "DBM", "DB"]
+
+
+[defaults]
+wavelength = "1550 nm"
+sample_count = "1"
+auto_range = "ON"
+
+
+[metadata]
+zero_duration = 3.0   
+is_mainframe = false         
+is_module = false            
+is_multichannel = false      
+channel_count = 1            
+
+driver_category = "optical_power_meters"               
+domain = "photonics"
+classification = "sensor"
