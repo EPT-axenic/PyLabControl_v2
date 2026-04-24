@@ -1,0 +1,84 @@
+# ==============================================================================
+# PYLABCONTROL V2 - SIGNAL GENERATOR MASTER TEMPLATE
+# ==============================================================================
+# Description: Universal configuration schema for RF/Microwave Signal Generators.
+# ==============================================================================
+
+brand = "TEMPLATE"
+model = "SIGGEN_GENERIC"
+version = "2.2.0"
+
+[scpi_commands]
+reset = "*RST"
+idn = "*IDN?"
+opc_query = "*OPC?"
+
+# ==============================================================================
+# CORE FUNCTIONS (MANDATORY FOR SIGGEN BASE)
+# ==============================================================================
+set_frequency = "SOUR:FREQ:CW {value}"
+get_frequency = "SOUR:FREQ:CW?"
+set_power = "SOUR:POW:LEV:IMM:AMPL {value}"
+get_power = "SOUR:POW:LEV:IMM:AMPL?"
+set_output_status = "OUTP:STAT {value}"
+get_output_status = "OUTP:STAT?"
+set_modulation_status = "OUTP:MOD:STAT {value}"
+get_modulation_status = "OUTP:MOD:STAT?"
+
+
+[trigger.scpi_commands]
+# ==============================================================================
+# UNIVERSAL TRIGGER SUBSYSTEM (For Frequency/Power List Sweeps)
+# ==============================================================================
+set_source = "TRIG:SOUR {value}"
+get_source = "TRIG:SOUR?"
+set_delay = "TRIG:DEL {value}"
+get_delay = "TRIG:DEL?"
+set_count = "TRIG:COUN {value}"
+get_count = "TRIG:COUN?"
+fire = "*TRG"
+abort = "ABOR"
+
+
+[limits]
+[limits.frequency]
+min = 1000.0         # 1 kHz
+max = 40000000000.0  # 40 GHz
+unit = "Hz"
+
+[limits.power]
+min = -120.0
+max = 20.0
+unit = "dBm"
+
+[trigger.limits.delay]
+min = 0.0
+max = 3600.0
+unit = "s"
+
+[trigger.limits.count]
+min = 1
+max = 1000000
+unit = ""
+
+
+[validation]
+output_modes = ["ON", "OFF", "1", "0"]
+modulation_modes = ["ON", "OFF", "1", "0"]
+[trigger.validation]
+sources = ["IMM", "EXT", "BUS", "TIM"]
+
+
+[defaults]
+frequency = "1 GHz"
+power = "-20 dBm"
+output = "OFF"
+modulation = "OFF"
+
+
+[metadata]
+is_mainframe = false         
+is_module = false            
+driver_category = "signal_generators"               
+domain = "electrical"
+classification = "source"
