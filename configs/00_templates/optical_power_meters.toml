@@ -91,3 +91,42 @@ channel_count = 1
 driver_category = "optical_power_meters"               
 domain = "photonics"
 classification = "sensor"
+
+[trigger]
+# ==============================================================================
+# UNIVERSAL TRIGGER SUBSYSTEM
+# ==============================================================================
+[trigger.scpi_commands]
+set_source = "TRIG:SOUR {value}"
+get_source = "TRIG:SOUR?"
+set_delay = "TRIG:DEL {value}"
+get_delay = "TRIG:DEL?"
+set_count = "TRIG:COUN {value}"
+get_count = "TRIG:COUN?"
+set_timer = "TRIG:TIM {value}"
+get_timer = "TRIG:TIM?"
+fire = "*TRG"
+abort = "ABOR"
+
+[trigger.limits]
+[trigger.limits.delay]
+min = 0.0
+max = 3600.0
+unit = "s"
+
+[trigger.limits.count]
+min = 1
+max = 1000000
+unit = ""
+
+[trigger.limits.timer]
+min = 0.0001
+max = 3600.0
+unit = "s"
+
+[trigger.validation]
+# IMM = Immediate (Run Free)
+# EXT = External BNC
+# BUS = Software (*TRG)
+# TIM = Internal Timer
+sources = ["IMM", "EXT", "BUS", "TIM"]

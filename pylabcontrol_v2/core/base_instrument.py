@@ -2,6 +2,7 @@ import logging
 from typing import Optional, List, Any
 from pylabcontrol_v2.core.models import InstrumentConfig
 from pylabcontrol_v2.adapters.base_adapter import BaseAdapter
+from pylabcontrol_v2.core.trigger_manager import TriggerManager
 from pylabcontrol_v2.utils.unit_manager import um
 
 class BaseInstrument:
@@ -39,6 +40,11 @@ class BaseInstrument:
         
         # Consistent naming: Use 'self.log' everywhere for unified routing
         self.log = logging.getLogger(f"pylabcontrol_v2.{self.config.model.lower()}")
+
+        # Attach the Universal Trigger Subsystem
+        # If the TOML has no [trigger] block, the manager methods will 
+        # safely raise NotImplementedError if called.
+        self.trigger = TriggerManager(self)
         
         # Build the ID once from the config for high-speed logging
         self.instrument_id = f"{self.config.brand.upper()}_{self.config.model.upper()}"
