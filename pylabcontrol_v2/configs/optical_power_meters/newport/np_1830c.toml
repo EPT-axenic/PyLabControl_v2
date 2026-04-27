@@ -1,0 +1,57 @@
+# ==============================================================================
+# PYLABCONTROL V2 - OPTICAL POWER METER MASTER TEMPLATE
+# ==============================================================================
+# Description: Universal configuration schema for standard IEEE 488.2 OPMs.
+# ==============================================================================
+
+brand = "Newport"
+model = "NP_1830C"
+version = "2.2.0"
+
+[scpi_commands]
+
+# ==============================================================================
+# CORE FUNCTIONS (MANDATORY FOR OPM BASE)
+# ==============================================================================
+# --- MEASUREMENT NOUNS ---
+set_wavelength = "W{value}"
+get_wavelength = "W?"
+set_averaging_time = "F{value}"
+get_averaging_time = "F?"
+
+# --- CONFIGURATION ADJECTIVES ---
+set_power_unit = "U{value}"
+get_power_unit = "U?"
+set_range = "R{value}"
+get_range = "R?"
+
+# --- HARDWARE ACTIONS ---
+zero = "O"
+
+# --- THE DATA ACQUISITION TRINITY ---
+read = "D?"
+
+[limits]
+[limits.wavelength]
+min = 190.0
+max = 1800.0
+unit = "nm"
+
+
+[validation]
+power_units = ["W", "DBM", "DB"]
+range_modes = ["1", "2", "3", "4", "5", "6", "7", "8"] # Hardware discrete ranges
+
+
+[defaults]
+wavelength = "1550 nm"
+power_unit = "W"
+
+[metadata]
+# Explict Routing -> Forces the Factory to use the Proxy Class below
+driver_category = "optical_power_meters"
+driver_file = "np_1830c"
+driver_class = "Newport1830C"
+domain = "photonics"
+classification = "sensor"
+is_module = false
