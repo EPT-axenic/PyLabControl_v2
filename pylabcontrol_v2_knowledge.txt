@@ -57,6 +57,12 @@ if __name__ == "__main__":
     consolidate_codebase()
 
 ================================================================================
+### FILE: pyproject.toml ###
+================================================================================
+
+
+
+================================================================================
 ### FILE: README.md ###
 ================================================================================
 
@@ -190,529 +196,20 @@ setup(
 )
 
 ================================================================================
-### FILE: configs\lasers\santec\tsl210.toml ###
-================================================================================
-
-brand = "Santec"
-model = "TSL210"
-version = "2.0.0"
-
-[scpi_commands]
-idn = "ID?"
-set_wavelength = "WA"
-get_wavelength = "WA?"
-set_power = "OP"
-get_power = "OP?"
-set_output_on = "LO"
-set_output_off = "LF"
-get_output_status = "SU"
-
-[limits]
-[limits.wavelength]
-min = 1260.0
-max = 1630.0
-unit = "nm"
-
-[limits.power]
-min = -10.0
-max = 13.0
-unit = "dBm"
-
-# --- Mandatory Sections for V2 Standard ---
-[validation]
-# Empty for now, but the header MUST exist if not using defaults in Pydantic
-
-[defaults]
-# Empty for now
-
-================================================================================
-### FILE: configs\templates\lasers.toml ###
-================================================================================
-
-# ==============================================================================
-# PYLABCONTROL V2 - TUNABLE LASER SOURCE (TLS) MASTER TEMPLATE
-# ==============================================================================
-# Description: Universal configuration schema for Tunable Lasers.
-# Compatibility: Supports Standalone, Modular, and Multi-Channel topologies.
-# ==============================================================================
-
-brand = "TEMPLATE_VENDOR"
-model = "GENERIC_TLS"
-version = "2.1.0"
-
-[scpi_commands]
-# ------------------------------------------------------------------------------
-# IEEE 488.2 STANDARD OVERRIDES
-# ------------------------------------------------------------------------------
-# Framework falls back to defaults (*RST, *IDN?, *OPC?) if these are omitted.
-reset = "*RST"
-idn = "*IDN?"
-opc_query = "*OPC?"
-
-# ------------------------------------------------------------------------------
-# TLS CORE VERBS (Required by the Explicit Proxy / Descriptors)
-# ------------------------------------------------------------------------------
-# ARCHITECTURAL RULE: If this is a mainframe module, you MUST include the 
-# {slot} and {channel} kwargs (e.g., "SOUR{slot}:CHAN{channel}:WAV {value}").
-# If it is a standalone single-channel laser, omit the kwargs (e.g., "SOUR:WAV {value}").
-
-set_wavelength = "SOUR:WAV {value}"      # Maps to laser.wavelength = value
-get_wavelength = "SOUR:WAV?"             # Maps to val = laser.wavelength
-set_power      = "SOUR:POW {value}"      # Maps to laser.power = value
-get_power      = "SOUR:POW?"             # Maps to val = laser.power
-set_output     = "OUTP:STAT {value}"     # Maps to laser.output = "ON"
-get_output     = "OUTP:STAT?"            # Maps to val = laser.output
-
-# ------------------------------------------------------------------------------
-# HARDWARE-SPECIFIC VERBS (Optional)
-# ------------------------------------------------------------------------------
-set_trigger_mode = "TRIG:SOUR {value}"
-get_status_byte  = "STAT:OPER:COND?"     # Useful for custom .wait_until_ready() polling
-
-
-[limits]
-# ------------------------------------------------------------------------------
-# PHYSICAL SAFETY BOUNDARIES (Enforced by MetricParameter Descriptors)
-# ------------------------------------------------------------------------------
-# The 'unit' string MUST be exactly compatible with the Pint UnitRegistry.
-[limits.wavelength]
-min = 1260.0
-max = 1630.0
-unit = "nm"
-
-[limits.power]
-min = -10.0
-max = 13.0
-unit = "dBm"
-
-
-[validation]
-# ------------------------------------------------------------------------------
-# DISCRETE STATE LISTS (Enforced by InstrumentParameter Descriptors)
-# ------------------------------------------------------------------------------
-# Defines the exact acceptable strings to prevent transport layer syntax errors.
-allowed_states = ["ON", "OFF", "1", "0"]
-trigger_modes = ["IMM", "EXT", "BUS"]
-
-
-[defaults]
-# ------------------------------------------------------------------------------
-# INITIALIZATION STATES
-# ------------------------------------------------------------------------------
-# Safe values pushed to the hardware immediately upon framework connection.
-# Numeric values MUST include their unit string to pass Metric validation.
-wavelength = "1550 nm"
-power = "0 dBm"
-output = "OFF"
-
-
-[metadata]
-# ------------------------------------------------------------------------------
-# TOPOLOGICAL DIRECTIVES (Consumed by Factory & ConfigLoader)
-# ------------------------------------------------------------------------------
-is_mainframe = false         # False for Lasers. True ONLY for Chassis multiplexers.
-is_module = false            # True if this hardware plugs into a Chassis.
-is_multichannel = false      # True if a single module/box has multiple laser outputs.
-channel_count = 1            # Defines the bounds for ChannelBase hydration.
-
-# ------------------------------------------------------------------------------
-# EXPLICIT PROXY ROUTING (The "No Magic" Architecture)
-# ------------------------------------------------------------------------------
-# If the instrument requires complex Python methods or custom polling loops,
-# define the path to its dedicated Proxy Class here. 
-# If omitted, the framework safely defaults to `BaseInstrument` (or `ModuleBase`).
-driver_category = "lasers"               # Directory: instruments/lasers/
-driver_file = "template_vendor"          # File: template_vendor.py
-driver_class = "TemplateVendorTLS"       # Class: class TemplateVendorTLS(BaseInstrument):
-
-# ------------------------------------------------------------------------------
-# CAPABILITY FLAGS (Consumed by UI and Script Logic)
-# ------------------------------------------------------------------------------
-domain = "photonics"
-classification = "source"
-has_attenuator = false
-is_tunable = true
-requires_handshake = true    # Flags if .wait_until_ready() is mandatory after parameter changes.
-
-================================================================================
-### FILE: configs\templates\mainframes.toml ###
-================================================================================
-
-# ==============================================================================
-# PYLABCONTROL V2 - MAINFRAME/CHASSIS MASTER TEMPLATE
-# ==============================================================================
-# Description: Defines the topological multiplexer. Owns the physical adapter.
-# Path: configs/mainframes/{brand}/{model}.toml
-# ==============================================================================
-
-brand = "VENDOR_NAME"
-model = "MODEL_NUMBER"
-version = "2.1.0"
-
-[scpi_commands]
-# ------------------------------------------------------------------------------
-# IEEE 488.2 STANDARD OVERRIDES
-# ------------------------------------------------------------------------------
-# Framework falls back to defaults (*RST, *IDN?) if these are omitted.
-reset = "*RST"
-idn = "*IDN?"
-clear_status = "*CLS"
-
-# ------------------------------------------------------------------------------
-# TOPOLOGICAL DISCOVERY (Required for ChassisBase)
-# ------------------------------------------------------------------------------
-# REQUIRED: The exact SCPI query used to interrogate a specific slot.
-# Must contain the {slot} placeholder for dynamic nodal injection.
-discovery_query = "SLOT{slot}:IDN?"
-
-[limits]
-# Mainframes generally do not have limits as they do not own physical parameters.
-# Leave empty unless the chassis has global sensors (e.g., backplane_temp).
-
-[validation]
-# Empty for standard mainframes. Use if the chassis has discrete global states.
-
-[defaults]
-# Empty for standard mainframes. Use for global chassis initialization.
-
-[metadata]
-# ------------------------------------------------------------------------------
-# ARCHITECTURAL FLAGS (Consumed by Factory and ChassisBase)
-# ------------------------------------------------------------------------------
-# REQUIRED: Tells the Factory to route instantiation to ChassisBase.
-is_mainframe = true
-is_module = false
-
-# Defines the spatial bounds for the runtime discovery loop.
-max_slots = 4
-
-# Identifies unswappable hardware (e.g., Agilent 8164A built-in display/slot 0).
-main_slot_index = 0
-
-# ------------------------------------------------------------------------------
-# EXPLICIT DRIVER ROUTING (Optional)
-# ------------------------------------------------------------------------------
-# Only define these if the mainframe requires a custom subclass of ChassisBase.
-# driver_category = "mainframes"
-# driver_file = "vendor_name"
-# driver_class = "CustomChassisClass"
-
-# ------------------------------------------------------------------------------
-# CAPABILITY FLAGS
-# ------------------------------------------------------------------------------
-domain = "general"
-classification = "multiplexer"
-
-================================================================================
-### FILE: configs\templates\modules.toml ###
-================================================================================
-
-# ==============================================================================
-# PYLABCONTROL V2 - HARDWARE MODULE TEMPLATE
-# ==============================================================================
-# Description: Defines a proxy driver. Does NOT own an adapter. Relies on parent.
-# ==============================================================================
-
-brand = "VENDOR_NAME"
-model = "MODEL_NUMBER"
-version = "2.0.0"
-
-[scpi_commands]
-# REQUIRED: All module SCPI commands MUST use Nodal Injection placeholders
-# The ModuleBase proxy will automatically inject {slot} and {channel} at runtime.
-set_parameter = "SOUR{slot}:CHAN{channel}:PARAM {value}"
-get_parameter = "SOUR{slot}:CHAN{channel}:PARAM?"
-
-# Status querying specific to this module (Optional)
-opc_query = "SOUR{slot}:CHAN{channel}:OPC?"
-
-[limits]
-# Enforced by MetricParameter descriptors. 
-# Must explicitly map to a base SI/derived unit defined in the UnitManager.
-[limits.parameter_name]
-min = 0.0
-max = 100.0
-unit = "base_unit"
-
-[validation]
-# Enforced by InstrumentParameter descriptors.
-# Defines the exact string matching required for discrete states.
-allowed_states = ["ON", "OFF", "1", "0"]
-trigger_modes = ["IMM", "EXT", "BUS"]
-
-[defaults]
-# Safe initialization states injected automatically upon module discovery.
-# Must include the unit string to pass through the MetricParameter validation.
-parameter_name = "0.0 base_unit"
-output_state = "OFF"
-
-[metadata]
-# REQUIRED FOR MODULES: Identifies this config as a proxy, not a standalone device.
-is_module = true
-
-# ------------------------------------------------------------------------------
-# EXPLICIT PROXY ROUTING (The "No Magic" Architecture)
-# ------------------------------------------------------------------------------
-# Maps this config to a specific Python driver file and class.
-driver_category = "modules"               # e.g., 'lasers', 'smus'
-driver_file = "vendor_name"               # The .py filename
-driver_class = "ModelNameModule"          # The class inside that file
-
-# Taxonomy flags for programmatic filtering (e.g., UI dashboard generation)]
-domain = "photonics"       # e.g., 'electrical', 'motion', 'photonics'
-classification = "source"  # e.g., 'sensor', 'actuator', 'source'
-
-# Capability flags utilized by the Logic Core
-is_multichannel = false
-channel_count = 1
-requires_handshake = true
-
-================================================================================
-### FILE: pylabcontrol_v2\__init__.py ###
+### FILE: pylabcontrol_v2/__init__.py ###
 ================================================================================
 
 
 
 ================================================================================
-### FILE: pylabcontrol_v2\adapters\base_adapter.py ###
-================================================================================
-
-from abc import ABC, abstractmethod
-import logging
-from pylabcontrol_v2.utils.logging_manager import LogTiers
-
-class BaseAdapter(ABC):
-    """
-    Abstract Base Class for all PyLabControl transport layers.
-    Every adapter must implement these primitives.
-    """
-    def __init__(self, address: str, instrument_id: str = None):
-        self.address = address
-        self.instrument_id = instrument_id or address
-        # All transport traffic goes here
-        self.logger = logging.getLogger(LogTiers.TRANSPORT)
-
-    @abstractmethod
-    def write(self, command: str):
-        """Send a string command to the hardware."""
-        pass
-
-    @abstractmethod
-    def read(self) -> str:
-        """Read a string response from the hardware."""
-        pass
-
-    @abstractmethod
-    def query(self, command: str) -> str:
-        """Atomic Write + Read operation."""
-        pass
-
-    @abstractmethod
-    def close(self):
-        """Cleanly release the hardware resource."""
-        pass
-
-================================================================================
-### FILE: pylabcontrol_v2\adapters\mock_adapter.py ###
-================================================================================
-
-from .base_adapter import BaseAdapter
-
-class MockAdapter(BaseAdapter):
-    """
-    Simulation Adapter. Returns pre-defined responses 
-    to simulate physical hardware.
-    """
-    def __init__(self, address: str = "MOCK::ID", **kwargs):
-        super().__init__(address, **kwargs)
-        self.responses = {
-            "*IDN?": "PyLabControl, MockInstrument, V2-Alpha",
-            "*OPC?": "1"
-        }
-        self.last_written = None
-
-    def write(self, command: str):
-        self.last_written = command
-        # You could add logic here to update internal state (e.g. power on/off)
-
-    def read(self) -> str:
-        return self.responses.get(self.last_written, "MOCK_OK")
-
-    def query(self, command: str) -> str:
-        self.write(command)
-        return self.read()
-
-    def close(self):
-        pass
-
-================================================================================
-### FILE: pylabcontrol_v2\adapters\tcp_adapter.py ###
-================================================================================
-
-import socket
-from .base_adapter import BaseAdapter
-
-class TCPAdapter(BaseAdapter):
-    """Adapter for raw TCP/IP Socket communication."""
-
-    def __init__(self, address: str, port: int = 5025, timeout: float = 5.0, **kwargs):
-        super().__init__(address, **kwargs)
-        self.port = port
-        self.timeout = timeout
-        self.sock = None
-        self._connect()
-
-    def _connect(self):
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.settimeout(self.timeout)
-        self.sock.connect((self.address, self.port))
-
-    def write(self, command: str):
-        full_cmd = (command + '\n').encode('ascii')
-        self.sock.sendall(full_cmd)
-
-    def read(self) -> str:
-        return self.sock.recv(4096).decode('ascii').strip()
-
-    def query(self, command: str) -> str:
-        self.write(command)
-        return self.read()
-
-    def close(self):
-        if self.sock:
-            self.sock.close()
-
-================================================================================
-### FILE: pylabcontrol_v2\adapters\visa_adapter.py ###
-================================================================================
-
-import pyvisa as visa
-from .base_adapter import BaseAdapter
-
-class VISAAdapter(BaseAdapter):
-    """
-    Adapter for VISA-compliant instruments (GPIB, USB-TMC, TCPIP::INSTR).
-    Refactored from the legacy ConnectionManager.
-    """
-    def __init__(self, address: str, timeout: int = 5000, term_chars: str = '\n', **kwargs):
-        super().__init__(address, **kwargs)
-        self.rm = visa.ResourceManager()
-        self.inst = self.rm.open_resource(address)
-        self.inst.timeout = timeout
-        self.inst.write_termination = term_chars
-        self.inst.read_termination = term_chars
-
-    def write(self, command: str):
-        self.inst.write(command)
-
-    def read(self) -> str:
-        return self.inst.read().strip()
-
-    def query(self, command: str) -> str:
-        return self.inst.query(command).strip()
-
-    def close(self):
-        self.inst.close()
-        self.rm.close()
-
-================================================================================
-### FILE: pylabcontrol_v2\adapters\__init__.py ###
-================================================================================
-
-
-
-================================================================================
-### FILE: pylabcontrol_v2\core\base_channels.py ###
-================================================================================
-
-from typing import Any, Dict, TYPE_CHECKING
-from pylabcontrol_v2.core.base_instrument import BaseInstrument
-
-if TYPE_CHECKING:
-    from pylabcontrol_v2.core.base_instrument import BaseInstrument
-
-class ChannelBase(BaseInstrument):
-    """
-    Proxy driver representing a discrete physical channel of a hardware device.
-
-    This class provides a unit-aware, descriptor-driven interface for sub-components 
-    (channels) of a larger hardware device[cite: 200]. It inherits the parent's 
-    configuration and adapter while appending its specific channel coordinate to 
-    the routing path for Nodal Injection[cite: 151, 166].
-
-    Attributes:
-        channel_id (Any): The identifier for this channel (e.g., 1, 2, or 'A', 'B').
-        _parent (BaseInstrument): The hardware device or module that owns this channel.
-        routing_kwargs (Dict[str, Any]): Topological coordinates for SCPI formatting.
-
-    Engineering Context:
-        Channels are implemented as "Transparent Proxies." They do not maintain 
-        their own I/O locks or adapters[cite: 154]. Instead, they delegate all 
-        raw transport requests to their parent. This recursion ensures that if 
-         a channel is part of a mainframe module, its I/O is automatically 
-        wrapped in the chassis-level Mutex lock[cite: 175]. If it is a channel 
-        of a standalone instrument, it bypasses unnecessary locking for 
-        maximum performance[cite: 156].
-    """
-    
-    def __init__(self, parent: 'BaseInstrument', channel_id: Any) -> None:
-        """
-        Initializes the channel proxy and merges topological coordinates.
-
-        Args:
-            parent (BaseInstrument): The parent instrument or module owning this channel.
-            channel_id (Any): The physical channel identifier (numeric or string).
-        """
-        self._parent = parent
-        self.channel_id = channel_id
-        
-        # Inherit the validated config and adapter from the parent [cite: 91, 92]
-        super().__init__(adapter=self._parent.adapter, config=self._parent.config)
-        
-        # RECURSIVE ROUTING: Merge this channel ID with the parent's existing coordinates.
-        # This handles Slot -> Channel and Standalone -> Channel mapping automatically.
-        self.routing_kwargs = {**self._parent.routing_kwargs, "channel": self.channel_id}
-
-    def write_raw(self, command: str) -> None:
-        """
-        Delegates raw transmission to the parent to maintain the I/O chain.
-        
-        Args:
-            command (str): The fully formatted SCPI string.
-
-        Engineering Context:
-            By calling the parent's raw method rather than the adapter directly, 
-            we ensure that any thread-safety logic (Mutex locks) defined in the 
-            parent or grandparent is respected[cite: 156, 175].
-        """
-        if hasattr(self._parent, 'write_raw'):
-            self._parent.write_raw(command)
-        else:
-            # Fallback to direct adapter if parent is a primitive BaseInstrument
-            self.adapter.write(command)
-
-    def query_raw(self, command: str) -> str:
-        """
-        Delegates atomic query to the parent to maintain the I/O chain.
-
-        Args:
-            command (str): The SCPI query string.
-
-        Returns:
-            str: The raw hardware response.
-        """
-        if hasattr(self._parent, 'query_raw'):
-            return self._parent.query_raw(command)
-        return self.adapter.query(command)
-
-================================================================================
-### FILE: pylabcontrol_v2\core\base_instrument.py ###
+### FILE: pylabcontrol_v2/core/base_instrument.py ###
 ================================================================================
 
 import logging
 from typing import Optional, List, Any
 from pylabcontrol_v2.core.models import InstrumentConfig
 from pylabcontrol_v2.adapters.base_adapter import BaseAdapter
+from pylabcontrol_v2.core.trigger_manager import TriggerManager
 from pylabcontrol_v2.utils.unit_manager import um
 
 class BaseInstrument:
@@ -750,6 +247,11 @@ class BaseInstrument:
         
         # Consistent naming: Use 'self.log' everywhere for unified routing
         self.log = logging.getLogger(f"pylabcontrol_v2.{self.config.model.lower()}")
+
+        # Attach the Universal Trigger Subsystem
+        # If the TOML has no [trigger] block, the manager methods will 
+        # safely raise NotImplementedError if called.
+        self.trigger = TriggerManager(self)
         
         # Build the ID once from the config for high-speed logging
         self.instrument_id = f"{self.config.brand.upper()}_{self.config.model.upper()}"
@@ -1022,7 +524,7 @@ class BaseInstrument:
         self.adapter.close()
 
 ================================================================================
-### FILE: pylabcontrol_v2\core\base_mainframe.py ###
+### FILE: pylabcontrol_v2/core/base_mainframe.py ###
 ================================================================================
 
 import threading
@@ -1208,7 +710,193 @@ class ChassisBase(BaseInstrument):
                     self.log.error(f"Failed to load module in Slot {slot_idx}: {e}")
 
 ================================================================================
-### FILE: pylabcontrol_v2\core\descriptors.py ###
+### FILE: pylabcontrol_v2/core/models.py ###
+================================================================================
+
+from pydantic import BaseModel, Field
+from typing import Dict, Any, Optional
+
+class ParameterLimits(BaseModel):
+    """
+    Defines the physical bounding box for continuous numerical hardware parameters.
+
+    This schema is used exclusively by the `MetricParameter` descriptor to enforce 
+    hardware safety limits before values are processed by the transport layer.
+
+    Attributes:
+        min (float): The absolute minimum allowable value in the specified base unit.
+        max (float): The absolute maximum allowable value in the specified base unit.
+        unit (str): The exact physical unit string expected by the hardware (e.g., 'nm', 'dBm').
+
+    Engineering Context:
+        Acts as the immutable truth for hardware safety. By strictly defining bounds 
+        at the schema level, we prevent catastrophic operator errors (e.g., attempting 
+        to push 1000 W to a diode expecting 1000 mW). The `UnitManager` relies on the 
+        `unit` attribute here to perform accurate dimensional analysis.
+    """
+    min: float
+    max: float
+    unit: str
+
+
+class InstrumentConfig(BaseModel):
+    """
+    The master validation schema for PyLabControl V2 TOML configurations.
+
+    Every instrument, whether a standalone device, a topological multiplexer (Chassis), 
+    or a proxy driver (Module), must have its static TOML file parsed and validated 
+    through this Pydantic model before the framework will instantiate it.
+
+    Attributes:
+        brand (str): The vendor or manufacturer identifier (e.g., 'agilent', 'santec').
+        model (str): The specific model number of the physical hardware.
+        version (str): The internal schema version for backward compatibility tracking.
+        scpi_commands (Dict[str, str]): Abstract verb-to-SCPI mappings. Defines the exact 
+                                        string templates (which may include kwargs like 
+                                        `{slot}`) to be dispatched over the transport bus.
+        limits (Dict[str, ParameterLimits]): Maps continuous descriptors (e.g., 'wavelength') 
+                                             to their specific numerical safety boundaries.
+        validation (Dict[str, Any]): Defines allowable discrete strings/states (e.g., 
+                                     `["ON", "OFF", "1", "0"]`) for `InstrumentParameter` descriptors.
+        defaults (Dict[str, Any]): Safe initialization states pushed to the instrument upon connection.
+        metadata (Optional[Dict[str, Any]]): Topological directives utilized by the core routing 
+                                             logic (e.g., `is_mainframe = true`, `max_slots = 4`).
+
+    Engineering Context:
+        This model represents the exact border between the static text file and dynamic 
+        execution. By forcing TOML files through this strict validation layer, we guarantee 
+        that the Tier-3 Logic Core (`BaseInstrument` and `ChassisBase`) will never encounter 
+        a missing SCPI template or an undefined limit at runtime. If a user writes a bad 
+        TOML, the script crashes here instantly, rather than failing silently halfway through 
+        a 10-hour data acquisition sweep.
+    """
+    brand: str
+    model: str
+    version: str
+    
+    scpi_commands: Dict[str, str]
+    limits: Dict[str, ParameterLimits]
+    validation: Dict[str, Any]
+    defaults: Dict[str, Any]
+    
+    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
+
+================================================================================
+### FILE: pylabcontrol_v2/core/__init__.py ###
+================================================================================
+
+
+
+================================================================================
+### FILE: pylabcontrol_v2/core/factory.py ###
+================================================================================
+
+import importlib
+import logging
+from typing import Any, Dict
+
+from pylabcontrol_v2.utils.config_loader import ConfigLoader
+from pylabcontrol_v2.adapters.visa_adapter import VISAAdapter
+from pylabcontrol_v2.adapters.tcp_adapter import TCPAdapter
+from pylabcontrol_v2.adapters.mock_adapter import MockAdapter
+from pylabcontrol_v2.core.base_mainframe import ChassisBase
+from pylabcontrol_v2.core.base_instrument import BaseInstrument
+
+logger = logging.getLogger("pylabcontrol_v2.factory")
+
+def load_instrument(
+    category: str, 
+    brand: str, 
+    model: str, 
+    address: str = "MOCK", 
+    **kwargs: Any
+) -> BaseInstrument:
+    """
+    Orchestrates the dynamic instantiation of physical hardware control drivers.
+
+    This factory implements the Tier-3 initialization pipeline. It enforces the 
+    separation of physical topology (Adapters) from software intent (Descriptors) 
+    by dynamically binding a runtime-selected transport layer to a TOML-defined 
+    configuration schema. 
+
+    Args:
+        category (str): The functional taxonomy of the instrument (e.g., 'lasers', 'mainframes', 'modules').
+        brand (str): The manufacturer string, used for directory traversal (e.g., 'santec', 'agilent').
+        model (str): The specific hardware model, corresponding to the TOML filename and target class name (e.g., 'TSL210').
+        address (str, optional): The physical transport routing address (e.g., 'GPIB0::20::INSTR', 'TCPIP::192.168.1.5::INSTR'). Defaults to "MOCK".
+        **kwargs: Arbitrary keyword arguments passed to the specific instrument constructor.
+
+    Returns:
+        BaseInstrument: A fully instantiated, connection-ready driver. This will be a specialized 
+        concrete subclass (e.g., `TSL210`), a topological multiplexer (`ChassisBase`), or the 
+        generic `BaseInstrument` fallback if no custom logic is required.
+
+    Raises:
+        ValueError: If the required TOML configuration cannot be found or parsed.
+        ImportError: If a specialized driver file exists but contains syntactical errors.
+        
+    Engineering Context:
+        To maintain an infinitely scalable, hardware-agnostic ecosystem, this factory prioritizes 
+        configuration-driven instantiation. If a specialized Python driver file (e.g., `santec.py`) 
+        is not found (`ModuleNotFoundError`), the system assumes the instrument is fully abstracted 
+        via its TOML and safely falls back to returning a generic `BaseInstrument`.
+    """
+    
+    # 1. Load the Configuration Model first (Hierarchical Schema Validation)
+    config = ConfigLoader.load_config(category, brand, model)
+
+    # 2. Transport Layer Abstraction
+    address_upper = address.upper()
+    if "MOCK" in address_upper:
+        adapter = MockAdapter(address)
+    elif "::" in address_upper:
+        adapter = VISAAdapter(address)
+    else:
+        adapter = TCPAdapter(address)
+
+    # 3. Topological Routing (The Mainframe Intercept)
+    if category.lower() == "mainframes":
+        # ChassisBase handles dynamic runtime discovery of its own slots internally
+        logger.info(f"Instantiating Mainframe Multiplexer for {brand.upper()} {model.upper()}")
+        return ChassisBase(config=config, adapter=adapter, **kwargs)
+
+    # 4. Dynamic Concrete Driver Discovery
+    module_path = f"pylabcontrol_v2.instruments.{category.lower()}.{brand.lower()}"
+    class_name = model.upper()
+
+    try:
+        # Attempt to load a vendor-specific override class (e.g., TSL210)
+        module = importlib.import_module(module_path)
+        InstrumentClass = getattr(module, class_name)
+        logger.debug(f"Vendor-specific class loaded: {class_name} from {module_path}")
+        return InstrumentClass(config=config, adapter=adapter, **kwargs)
+
+    except ModuleNotFoundError:
+        # ARCHITECTURAL SAFEGUARD: 
+        # No vendor-specific file exists. Rely entirely on the TOML + BaseInstrument.
+        logger.info(
+            f"No specific driver found at {module_path}. "
+            f"Falling back to universal BaseInstrument for {brand.upper()} {class_name}."
+        )
+        return BaseInstrument(config=config, adapter=adapter, **kwargs)
+        
+    except AttributeError:
+        # The file exists, but the specific class name (e.g., TSL210) is missing inside it.
+        logger.warning(
+            f"Module {module_path} found, but class {class_name} is missing. "
+            f"Falling back to universal BaseInstrument."
+        )
+        return BaseInstrument(config=config, adapter=adapter, **kwargs)
+        
+    except ImportError as e:
+        # CRITICAL FAILURE: The file exists but is broken (syntax error, circular import).
+        # We must NOT silently fail back to BaseInstrument here, as the user intended 
+        # custom logic to run but it crashed.
+        logger.error(f"Critical syntax or import error in {module_path}: {e}")
+        raise
+
+================================================================================
+### FILE: pylabcontrol_v2/core/descriptors.py ###
 ================================================================================
 
 import logging
@@ -1436,381 +1124,232 @@ class MetricParameter(InstrumentParameter):
             obj.adapter.write(formatted_cmd)
 
 ================================================================================
-### FILE: pylabcontrol_v2\core\factory.py ###
+### FILE: pylabcontrol_v2/core/base_channels.py ###
 ================================================================================
 
-import importlib
-import logging
-from typing import Any, Dict
-
-from pylabcontrol_v2.utils.config_loader import ConfigLoader
-from pylabcontrol_v2.adapters.visa_adapter import VISAAdapter
-from pylabcontrol_v2.adapters.tcp_adapter import TCPAdapter
-from pylabcontrol_v2.adapters.mock_adapter import MockAdapter
-from pylabcontrol_v2.core.base_mainframe import ChassisBase
+from typing import Any, Dict, TYPE_CHECKING
 from pylabcontrol_v2.core.base_instrument import BaseInstrument
 
-logger = logging.getLogger("pylabcontrol_v2.factory")
+if TYPE_CHECKING:
+    from pylabcontrol_v2.core.base_instrument import BaseInstrument
 
-def load_instrument(
-    category: str, 
-    brand: str, 
-    model: str, 
-    address: str = "MOCK", 
-    **kwargs: Any
-) -> BaseInstrument:
+class ChannelBase(BaseInstrument):
     """
-    Orchestrates the dynamic instantiation of physical hardware control drivers.
+    Proxy driver representing a discrete physical channel of a hardware device.
 
-    This factory implements the Tier-3 initialization pipeline. It enforces the 
-    separation of physical topology (Adapters) from software intent (Descriptors) 
-    by dynamically binding a runtime-selected transport layer to a TOML-defined 
-    configuration schema. 
-
-    Args:
-        category (str): The functional taxonomy of the instrument (e.g., 'lasers', 'mainframes', 'modules').
-        brand (str): The manufacturer string, used for directory traversal (e.g., 'santec', 'agilent').
-        model (str): The specific hardware model, corresponding to the TOML filename and target class name (e.g., 'TSL210').
-        address (str, optional): The physical transport routing address (e.g., 'GPIB0::20::INSTR', 'TCPIP::192.168.1.5::INSTR'). Defaults to "MOCK".
-        **kwargs: Arbitrary keyword arguments passed to the specific instrument constructor.
-
-    Returns:
-        BaseInstrument: A fully instantiated, connection-ready driver. This will be a specialized 
-        concrete subclass (e.g., `TSL210`), a topological multiplexer (`ChassisBase`), or the 
-        generic `BaseInstrument` fallback if no custom logic is required.
-
-    Raises:
-        ValueError: If the required TOML configuration cannot be found or parsed.
-        ImportError: If a specialized driver file exists but contains syntactical errors.
-        
-    Engineering Context:
-        To maintain an infinitely scalable, hardware-agnostic ecosystem, this factory prioritizes 
-        configuration-driven instantiation. If a specialized Python driver file (e.g., `santec.py`) 
-        is not found (`ModuleNotFoundError`), the system assumes the instrument is fully abstracted 
-        via its TOML and safely falls back to returning a generic `BaseInstrument`.
-    """
-    
-    # 1. Load the Configuration Model first (Hierarchical Schema Validation)
-    config = ConfigLoader.load_config(category, brand, model)
-
-    # 2. Transport Layer Abstraction
-    address_upper = address.upper()
-    if "MOCK" in address_upper:
-        adapter = MockAdapter(address)
-    elif "::" in address_upper:
-        adapter = VISAAdapter(address)
-    else:
-        adapter = TCPAdapter(address)
-
-    # 3. Topological Routing (The Mainframe Intercept)
-    if category.lower() == "mainframes":
-        # ChassisBase handles dynamic runtime discovery of its own slots internally
-        logger.info(f"Instantiating Mainframe Multiplexer for {brand.upper()} {model.upper()}")
-        return ChassisBase(config=config, adapter=adapter, **kwargs)
-
-    # 4. Dynamic Concrete Driver Discovery
-    module_path = f"pylabcontrol_v2.instruments.{category.lower()}.{brand.lower()}"
-    class_name = model.upper()
-
-    try:
-        # Attempt to load a vendor-specific override class (e.g., TSL210)
-        module = importlib.import_module(module_path)
-        InstrumentClass = getattr(module, class_name)
-        logger.debug(f"Vendor-specific class loaded: {class_name} from {module_path}")
-        return InstrumentClass(config=config, adapter=adapter, **kwargs)
-
-    except ModuleNotFoundError:
-        # ARCHITECTURAL SAFEGUARD: 
-        # No vendor-specific file exists. Rely entirely on the TOML + BaseInstrument.
-        logger.info(
-            f"No specific driver found at {module_path}. "
-            f"Falling back to universal BaseInstrument for {brand.upper()} {class_name}."
-        )
-        return BaseInstrument(config=config, adapter=adapter, **kwargs)
-        
-    except AttributeError:
-        # The file exists, but the specific class name (e.g., TSL210) is missing inside it.
-        logger.warning(
-            f"Module {module_path} found, but class {class_name} is missing. "
-            f"Falling back to universal BaseInstrument."
-        )
-        return BaseInstrument(config=config, adapter=adapter, **kwargs)
-        
-    except ImportError as e:
-        # CRITICAL FAILURE: The file exists but is broken (syntax error, circular import).
-        # We must NOT silently fail back to BaseInstrument here, as the user intended 
-        # custom logic to run but it crashed.
-        logger.error(f"Critical syntax or import error in {module_path}: {e}")
-        raise
-
-================================================================================
-### FILE: pylabcontrol_v2\core\models.py ###
-================================================================================
-
-from pydantic import BaseModel, Field
-from typing import Dict, Any, Optional
-
-class ParameterLimits(BaseModel):
-    """
-    Defines the physical bounding box for continuous numerical hardware parameters.
-
-    This schema is used exclusively by the `MetricParameter` descriptor to enforce 
-    hardware safety limits before values are processed by the transport layer.
+    This class provides a unit-aware, descriptor-driven interface for sub-components 
+    (channels) of a larger hardware device[cite: 200]. It inherits the parent's 
+    configuration and adapter while appending its specific channel coordinate to 
+    the routing path for Nodal Injection[cite: 151, 166].
 
     Attributes:
-        min (float): The absolute minimum allowable value in the specified base unit.
-        max (float): The absolute maximum allowable value in the specified base unit.
-        unit (str): The exact physical unit string expected by the hardware (e.g., 'nm', 'dBm').
+        channel_id (Any): The identifier for this channel (e.g., 1, 2, or 'A', 'B').
+        _parent (BaseInstrument): The hardware device or module that owns this channel.
+        routing_kwargs (Dict[str, Any]): Topological coordinates for SCPI formatting.
 
     Engineering Context:
-        Acts as the immutable truth for hardware safety. By strictly defining bounds 
-        at the schema level, we prevent catastrophic operator errors (e.g., attempting 
-        to push 1000 W to a diode expecting 1000 mW). The `UnitManager` relies on the 
-        `unit` attribute here to perform accurate dimensional analysis.
+        Channels are implemented as "Transparent Proxies." They do not maintain 
+        their own I/O locks or adapters[cite: 154]. Instead, they delegate all 
+        raw transport requests to their parent. This recursion ensures that if 
+         a channel is part of a mainframe module, its I/O is automatically 
+        wrapped in the chassis-level Mutex lock[cite: 175]. If it is a channel 
+        of a standalone instrument, it bypasses unnecessary locking for 
+        maximum performance[cite: 156].
     """
-    min: float
-    max: float
-    unit: str
-
-
-class InstrumentConfig(BaseModel):
-    """
-    The master validation schema for PyLabControl V2 TOML configurations.
-
-    Every instrument, whether a standalone device, a topological multiplexer (Chassis), 
-    or a proxy driver (Module), must have its static TOML file parsed and validated 
-    through this Pydantic model before the framework will instantiate it.
-
-    Attributes:
-        brand (str): The vendor or manufacturer identifier (e.g., 'agilent', 'santec').
-        model (str): The specific model number of the physical hardware.
-        version (str): The internal schema version for backward compatibility tracking.
-        scpi_commands (Dict[str, str]): Abstract verb-to-SCPI mappings. Defines the exact 
-                                        string templates (which may include kwargs like 
-                                        `{slot}`) to be dispatched over the transport bus.
-        limits (Dict[str, ParameterLimits]): Maps continuous descriptors (e.g., 'wavelength') 
-                                             to their specific numerical safety boundaries.
-        validation (Dict[str, Any]): Defines allowable discrete strings/states (e.g., 
-                                     `["ON", "OFF", "1", "0"]`) for `InstrumentParameter` descriptors.
-        defaults (Dict[str, Any]): Safe initialization states pushed to the instrument upon connection.
-        metadata (Optional[Dict[str, Any]]): Topological directives utilized by the core routing 
-                                             logic (e.g., `is_mainframe = true`, `max_slots = 4`).
-
-    Engineering Context:
-        This model represents the exact border between the static text file and dynamic 
-        execution. By forcing TOML files through this strict validation layer, we guarantee 
-        that the Tier-3 Logic Core (`BaseInstrument` and `ChassisBase`) will never encounter 
-        a missing SCPI template or an undefined limit at runtime. If a user writes a bad 
-        TOML, the script crashes here instantly, rather than failing silently halfway through 
-        a 10-hour data acquisition sweep.
-    """
-    brand: str
-    model: str
-    version: str
     
-    scpi_commands: Dict[str, str]
-    limits: Dict[str, ParameterLimits]
-    validation: Dict[str, Any]
-    defaults: Dict[str, Any]
-    
-    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
-
-================================================================================
-### FILE: pylabcontrol_v2\core\__init__.py ###
-================================================================================
-
-
-
-================================================================================
-### FILE: pylabcontrol_v2\instruments\lasers\agilent.py ###
-================================================================================
-
-
-
-================================================================================
-### FILE: pylabcontrol_v2\instruments\lasers\santec.py ###
-================================================================================
-
-import re
-import time
-from pylabcontrol_v2.instruments.lasers import TLS
-
-class TSL210(TLS):
-    def __init__(self, config, adapter):
-        super().__init__(config, adapter)
-        self.adapter.inst.read_termination = '\r\n'
-        self.adapter.inst.write_termination = '\r\n'
-        
-        self.adapter.write("SU0")
-        self.adapter.write("HD0")
-        
-        # Internal trackers for the generic wait method
-        self._target_wl = None
-        self._target_pwr = None
-        self._target_output = None
-
-    def wait_until_ready(self, timeout=15.0, tolerance_nm=0.005, tolerance_db=0.05):
+    def __init__(self, parent: 'BaseInstrument', channel_id: Any) -> None:
         """
-        Generic handshake: Checks all parameters against their last set targets.
-        Returns True when settled, False on timeout.
+        Initializes the channel proxy and merges topological coordinates.
+
+        Args:
+            parent (BaseInstrument): The parent instrument or module owning this channel.
+            channel_id (Any): The physical channel identifier (numeric or string).
         """
-        start_time = time.time()
-        self.log.info(f"[{self.instrument_id}] Waiting for hardware to settle...")
+        self._parent = parent
+        self.channel_id = channel_id
+        
+        # Inherit the validated config and adapter from the parent [cite: 91, 92]
+        super().__init__(adapter=self._parent.adapter, config=self._parent.config)
+        
+        # RECURSIVE ROUTING: Merge this channel ID with the parent's existing coordinates.
+        # This handles Slot -> Channel and Standalone -> Channel mapping automatically.
+        self.routing_kwargs = {**self._parent.routing_kwargs, "channel": self.channel_id}
 
-        while (time.time() - start_time) < timeout:
-            # Check 1: Wavelength (Mechanical)
-            if self._target_wl is not None:
-                current_wl = self.wavelength.magnitude
-                if abs(current_wl - self._target_wl) > tolerance_nm:
-                    time.sleep(0.2)
-                    continue
+    def write_raw(self, command: str) -> None:
+        """
+        Delegates raw transmission to the parent to maintain the I/O chain.
+        
+        Args:
+            command (str): The fully formatted SCPI string.
 
-            # Check 2: Power (APC Loop)
-            if self._target_pwr is not None:
-                current_pwr = self.power.magnitude
-                if abs(current_pwr - self._target_pwr) > tolerance_db:
-                    time.sleep(0.1)
-                    continue
+        Engineering Context:
+            By calling the parent's raw method rather than the adapter directly, 
+            we ensure that any thread-safety logic (Mutex locks) defined in the 
+            parent or grandparent is respected[cite: 156, 175].
+        """
+        if hasattr(self._parent, 'write_raw'):
+            self._parent.write_raw(command)
+        else:
+            # Fallback to direct adapter if parent is a primitive BaseInstrument
+            self.adapter.write(command)
 
-            # Check 3: Output (Relay/Protection Circuit)
-            if self._target_output is not None:
-                if self.output != self._target_output:
-                    time.sleep(0.2)
-                    continue
+    def query_raw(self, command: str) -> str:
+        """
+        Delegates atomic query to the parent to maintain the I/O chain.
 
-            # If we reach here, all set targets are matched
-            self.log.info(f"[{self.instrument_id}] Hardware READY.")
-            return True
+        Args:
+            command (str): The SCPI query string.
 
-        self.log.warning(f"[{self.instrument_id}] Wait timed out!")
-        return False
-
-    # --- Properties with Target Tracking ---
-
-    @property
-    def wavelength(self):
-        res = self.adapter.query(self.config.scpi_commands.get("get_wavelength"))
-        return self.validate_level(self._clean_response(res), "nm", context="wavelength")
-
-    @wavelength.setter
-    def wavelength(self, value):
-        qty = self.validate_level(value, "nm", context="wavelength")
-        self._target_wl = qty.magnitude # Store intent
-        self.adapter.write(f"WA {self._target_wl:.3f}")
-
-    @property
-    def power(self):
-        res = self.adapter.query(self.config.scpi_commands.get("get_power"))
-        return self.validate_level(self._clean_response(res), "dBm", context="power")
-
-    @power.setter
-    def power(self, value):
-        qty = self.validate_level(value, "dBm", context="power")
-        self._target_pwr = qty.magnitude # Store intent
-        self.adapter.write("AF") 
-        self.adapter.write(f"OP {self._target_pwr:.2f}")
-
-    @property
-    def output(self):
-        res = self.adapter.query("SU").strip()
-        return "ON" if res.startswith("-") else "OFF"
-
-    @output.setter
-    def output(self, value):
-        state = self.validate_state(value, ["ON", "OFF"], context="output")
-        self._target_output = state # Store intent
-        cmd = "LO" if state == "ON" else "LF"
-        self.adapter.write(cmd)
-
-    def _clean_response(self, raw_res):
-        clean = re.sub(r'[^0-9.\-]', '', raw_res)
-        if clean.count('.') > 1:
-            return clean.split('.')[-1]
-        return clean
+        Returns:
+            str: The raw hardware response.
+        """
+        if hasattr(self._parent, 'query_raw'):
+            return self._parent.query_raw(command)
+        return self.adapter.query(command)
 
 ================================================================================
-### FILE: pylabcontrol_v2\instruments\lasers\__init__.py ###
+### FILE: pylabcontrol_v2/core/trigger_manager.py ###
 ================================================================================
 
-from pylabcontrol_v2.core.base_instrument import BaseInstrument
-from pylabcontrol_v2.core.descriptors import MetricParameter, InstrumentParameter
+from typing import Union
+from pint import Quantity
 
-class TLS(BaseInstrument):
+class TriggerManager:
     """
-    Category Base for Tunable Laser Sources.
-    Defines the universal 'Nouns' (Parameters) and 'Verbs' (Methods) 
-    that every laser in PyLabControl must implement.
+    Universal Trigger Subsystem.
+    Attached to instrument base classes via Composition.
+    Handles the IEEE 488.2 standard trigger model (Source, Delay, Count, *TRG).
     """
-    
-    # --- Universal Nouns (Descriptors) ---
-    # These use generic limits_keys that every laser TOML must include.
-    wavelength = MetricParameter(
-        scpi_set="set_wavelength", 
-        scpi_get="get_wavelength", 
-        unit="nm", 
-        limits_key="wavelength"
-    )
-    
-    power = MetricParameter(
-        scpi_set="set_power", 
-        scpi_get="get_power", 
-        unit="dBm", 
-        limits_key="power"
-    )
+    def __init__(self, instrument):
+        self.instr = instrument
+        self.config = instrument.config.get("trigger", {})
+        self.scpi = self.config.get("scpi_commands", {})
+        self.limits = self.config.get("limits", {})
+        self.validation = self.config.get("validation", {})
 
-    output = InstrumentParameter(
-        scpi_set="set_output_status", 
-        scpi_get="get_output_status", 
-        allowed=["ON", "OFF", "1", "0"]
-    )
+    def _get_cmd(self, key: str) -> str:
+        cmd = self.scpi.get(key)
+        if not cmd:
+            raise NotImplementedError(
+                f"Trigger capability '{key}' is not supported by {self.instr.model}."
+            )
+        return cmd
 
-    # --- Universal Verbs (Methods) ---
-    def wait_for_idle(self):
-        """Standard blocking call to wait for laser operations to finish."""
-        return self.wait() # Uses IEEE 488.2 *WAI from core base
+    @property
+    def source(self) -> str:
+        """The trigger source (e.g., IMM, EXT, BUS, TIM)."""
+        return self.instr.adapter.query(self._get_cmd("get_source")).strip()
+
+    @source.setter
+    def source(self, value: str) -> None:
+        allowed = self.validation.get("sources", [])
+        state = self.instr.validate_state(value, allowed, context="Trigger Source")
+        self.instr.adapter.write(self._get_cmd("set_source").format(value=state))
+
+    @property
+    def delay(self) -> Quantity:
+        """Wait time between receiving the trigger and executing the action."""
+        res = self.instr.adapter.query(self._get_cmd("get_delay"))
+        return self.instr.validate_level(float(res), "s", context="Trigger Delay")
+
+    @delay.setter
+    def delay(self, value: Union[float, str, Quantity]) -> None:
+        qty = self.instr.validate_level(value, "s", context="Trigger Delay")
+        self.instr.adapter.write(self._get_cmd("set_delay").format(value=qty.magnitude))
+
+    @property
+    def count(self) -> int:
+        """Number of triggers to accept before returning to IDLE state."""
+        res = self.instr.adapter.query(self._get_cmd("get_count"))
+        return int(float(res))
+
+    @count.setter
+    def count(self, value: int) -> None:
+        val = self.instr.validate_level(value, "", context="Trigger Count")
+        self.instr.adapter.write(self._get_cmd("set_count").format(value=int(val.magnitude)))
+
+    def fire(self) -> None:
+        """Sends a software trigger over the bus (*TRG)."""
+        self.instr.log.info(f"[{self.instr.instrument_id}] Firing software trigger (*TRG)...")
+        self.instr.adapter.write(self._get_cmd("fire"))
+
+    def abort(self) -> None:
+        """Cancels a pending trigger wait and forces the hardware back to IDLE."""
+        self.instr.log.warning(f"[{self.instr.instrument_id}] Aborting trigger sequence!")
+        self.instr.adapter.write(self._get_cmd("abort"))
 
 ================================================================================
-### FILE: pylabcontrol_v2\utils\config_loader.py ###
+### FILE: pylabcontrol_v2/utils/config_loader.py ###
 ================================================================================
 
-import os
 import toml
+import importlib.resources as pkg_resources
+from pathlib import Path
 from pylabcontrol_v2.core.models import InstrumentConfig
 
 class ConfigLoader:
     """
-    V2 ConfigLoader: Navigates a hierarchical config tree.
-    Path: configs/{category}/{brand}/{model}.toml
+    V2 ConfigLoader: Dual-Path Resolution.
+    1. Checks User Overrides: ~/.pylabcontrol/configs/...
+    2. Falls back to Internal Package Data: pylabcontrol_v2/configs/...
     """
-    # Root configs directory
-    CONFIG_ROOT = os.path.normpath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "configs")
-    )
+    
+    # Define the User's local override directory (OS Agnostic: works on Win/Mac/Linux)
+    USER_CONFIG_ROOT = Path.home() / ".pylabcontrol" / "configs"
 
     @staticmethod
     def load_config(category: str, brand: str, model: str) -> InstrumentConfig:
         """
-        Loads and validates a TOML config from the brand-specific subfolder.
+        Loads and validates a TOML config, prioritizing user overrides.
         """
-        # New hierarchical path construction
-        config_path = os.path.join(
-            ConfigLoader.CONFIG_ROOT, 
-            category.lower(), 
-            brand.lower(), 
-            f"{model.lower()}.toml"
-        )
+        file_name = f"{model.lower()}.toml"
+        category_lower = category.lower()
+        brand_lower = brand.lower()
 
-        if not os.path.exists(config_path):
-            raise FileNotFoundError(f"Hardware config not found at: {config_path}")
+        raw_toml = None
+        config_source = ""
 
+        # ---------------------------------------------------------------------
+        # PATH 1: USER OVERRIDES (Local File System)
+        # ---------------------------------------------------------------------
+        user_path = ConfigLoader.USER_CONFIG_ROOT / category_lower / brand_lower / file_name
+        
+        if user_path.exists():
+            raw_toml = user_path.read_text(encoding="utf-8")
+            config_source = str(user_path)
+            
+        # ---------------------------------------------------------------------
+        # PATH 2: INTERNAL PACKAGE DATA (pip installed)
+        # ---------------------------------------------------------------------
+        else:
+            try:
+                # importlib.resources natively navigates the installed package zip/folder
+                resource_path = (pkg_resources.files("pylabcontrol_v2") 
+                                 / "configs" 
+                                 / category_lower 
+                                 / brand_lower 
+                                 / file_name)
+                
+                raw_toml = resource_path.read_text(encoding="utf-8")
+                config_source = f"Package Data ({resource_path})"
+                
+            except FileNotFoundError:
+                raise FileNotFoundError(
+                    f"Hardware config for {brand} {model} not found in "
+                    f"User Overrides ({ConfigLoader.USER_CONFIG_ROOT}) or Internal Package."
+                )
+
+        # ---------------------------------------------------------------------
+        # HYDRATION & VALIDATION
+        # ---------------------------------------------------------------------
         try:
-            raw_data = toml.load(config_path)
-            # Pydantic hydrates and validates the raw dictionary [cite: 62]
+            raw_data = toml.loads(raw_toml)
+            # Pydantic hydrates and validates the raw dictionary
             return InstrumentConfig(**raw_data)
         except toml.TomlDecodeError as e:
-            raise ValueError(f"TOML Syntax Error in {model}: {e}")
+            raise ValueError(f"TOML Syntax Error in {config_source}: {e}")
         except Exception as e:
-            raise ValueError(f"Configuration error for {brand} {model}: {e}")
+            raise ValueError(f"Configuration error for {brand} {model} from {config_source}: {e}")
 
     @staticmethod
     def format_command(template: str, **kwargs) -> str:
@@ -1821,110 +1360,7 @@ class ConfigLoader:
             raise ValueError(f"Missing expected SCPI parameter: {e}")
 
 ================================================================================
-### FILE: pylabcontrol_v2\utils\decorators.py ###
-================================================================================
-
-import functools
-import logging
-import time
-from pylabcontrol_v2.utils.logging_manager import LogTiers
-
-logger = logging.getLogger(LogTiers.ACTION)
-
-def instrument_logger(func):
-    @functools.wraps(func)
-    def wrapper(self, *args, **kwargs):
-        start_time = time.perf_counter()
-        try:
-            result = func(self, *args, **kwargs)
-            duration = (time.perf_counter() - start_time) * 1000
-            logger.info(
-                f"[{self.instrument_id}] {func.__name__} executed in {duration:.2f}ms",
-                extra={"inst_id": self.instrument_id}
-            )
-            return result
-        except Exception as e:
-            logger.error(f"[{self.instrument_id}] {func.__name__} FAILED: {str(e)}")
-            raise
-    return wrapper
-
-================================================================================
-### FILE: pylabcontrol_v2\utils\logging_manager.py ###
-================================================================================
-
-import logging
-import sys
-import queue
-from typing import Optional
-
-class LogTiers:
-    """Standardized tiers for PyLabControl V2 logging."""
-    # Ensure these match your package name exactly
-    TRANSPORT = "pylabcontrol_v2.transport"   # Raw SCPI/Adapter traffic
-    VALIDATION = "pylabcontrol_v2.validation" # Descriptor/Unit logic
-    ACTION = "pylabcontrol_v2.action"         # High-level instrument methods
-
-class GUILogHandler(logging.Handler):
-    """
-    Thread-safe handler that pushes logs into a Queue.
-    The GUI polls this queue to update its display.
-    """
-    def __init__(self, log_queue: queue.Queue):
-        super().__init__()
-        self.log_queue = log_queue
-
-    def emit(self, record):
-        try:
-            # Format the message using the attached formatter
-            msg = self.format(record)
-            self.log_queue.put({
-                "time": record.created,
-                "level": record.levelname,
-                "tier": record.name,
-                "msg": record.getMessage(),
-                "formatted": msg,
-                "inst_id": getattr(record, "inst_id", "System")
-            })
-        except Exception:
-            self.handleError(record)
-
-def setup_logging(level=logging.DEBUG, log_file="pylabcontrol_v2.log", log_queue: Optional[queue.Queue] = None):
-    """Initializes the hierarchical logging system for the v2 namespace."""
-    
-    # 1. Get the TOP LEVEL logger for the framework
-    # Any log sent to "pylabcontrol_v2.anything" will flow through this
-    framework_log = logging.getLogger("pylabcontrol_v2")
-    framework_log.setLevel(level)
-    
-    # Clear existing handlers to prevent duplicate lines in VS Code
-    if framework_log.hasHandlers():
-        framework_log.handlers.clear()
-
-    # 2. Formatter: Time | Context (Tier) | Level | Message
-    formatter = logging.Formatter('%(asctime)s | %(name)-25s | %(levelname)-8s | %(message)s', 
-                                  datefmt='%H:%M:%S')
-
-    # 3. Stream Handler (The "Terminal" Pipe)
-    sh = logging.StreamHandler(sys.stdout)
-    sh.setFormatter(formatter)
-    framework_log.addHandler(sh)
-
-    # 4. File Handler (The "Black Box" Record)
-    fh = logging.FileHandler(log_file)
-    fh.setFormatter(formatter)
-    framework_log.addHandler(fh)
-
-    # 5. Optional GUI Handler (The "Screen" Pipe)
-    if log_queue is not None:
-        gh = GUILogHandler(log_queue)
-        gh.setFormatter(formatter)
-        framework_log.addHandler(gh)
-
-    framework_log.info(f"V2 Logging Initialized at level {logging.getLevelName(level)}")
-    return framework_log
-
-================================================================================
-### FILE: pylabcontrol_v2\utils\unit_manager.py ###
+### FILE: pylabcontrol_v2/utils/unit_manager.py ###
 ================================================================================
 
 import math
@@ -2012,33 +1448,2321 @@ um = UnitManager()
 u = um.ureg
 
 ================================================================================
-### FILE: pylabcontrol_v2\utils\__init__.py ###
+### FILE: pylabcontrol_v2/utils/__init__.py ###
 ================================================================================
 
 
 
 ================================================================================
-### FILE: scripts\phase1_check.py ###
+### FILE: pylabcontrol_v2/utils/logging_manager.py ###
 ================================================================================
 
-from pylabcontrol_v2.core.factory import load_instrument
-from pylabcontrol_v2.adapters.mock_adapter import MockAdapter
+import logging
+import sys
+import queue
+from typing import Optional
+
+class LogTiers:
+    """Standardized tiers for PyLabControl V2 logging."""
+    # Ensure these match your package name exactly
+    TRANSPORT = "pylabcontrol_v2.transport"   # Raw SCPI/Adapter traffic
+    VALIDATION = "pylabcontrol_v2.validation" # Descriptor/Unit logic
+    ACTION = "pylabcontrol_v2.action"         # High-level instrument methods
+
+class GUILogHandler(logging.Handler):
+    """
+    Thread-safe handler that pushes logs into a Queue.
+    The GUI polls this queue to update its display.
+    """
+    def __init__(self, log_queue: queue.Queue):
+        super().__init__()
+        self.log_queue = log_queue
+
+    def emit(self, record):
+        try:
+            # Format the message using the attached formatter
+            msg = self.format(record)
+            self.log_queue.put({
+                "time": record.created,
+                "level": record.levelname,
+                "tier": record.name,
+                "msg": record.getMessage(),
+                "formatted": msg,
+                "inst_id": getattr(record, "inst_id", "System")
+            })
+        except Exception:
+            self.handleError(record)
+
+def setup_logging(level=logging.DEBUG, log_file="pylabcontrol_v2.log", log_queue: Optional[queue.Queue] = None):
+    """Initializes the hierarchical logging system for the v2 namespace."""
+    
+    # 1. Get the TOP LEVEL logger for the framework
+    # Any log sent to "pylabcontrol_v2.anything" will flow through this
+    framework_log = logging.getLogger("pylabcontrol_v2")
+    framework_log.setLevel(level)
+    
+    # Clear existing handlers to prevent duplicate lines in VS Code
+    if framework_log.hasHandlers():
+        framework_log.handlers.clear()
+
+    # 2. Formatter: Time | Context (Tier) | Level | Message
+    formatter = logging.Formatter('%(asctime)s | %(name)-25s | %(levelname)-8s | %(message)s', 
+                                  datefmt='%H:%M:%S')
+
+    # 3. Stream Handler (The "Terminal" Pipe)
+    sh = logging.StreamHandler(sys.stdout)
+    sh.setFormatter(formatter)
+    framework_log.addHandler(sh)
+
+    # 4. File Handler (The "Black Box" Record)
+    fh = logging.FileHandler(log_file)
+    fh.setFormatter(formatter)
+    framework_log.addHandler(fh)
+
+    # 5. Optional GUI Handler (The "Screen" Pipe)
+    if log_queue is not None:
+        gh = GUILogHandler(log_queue)
+        gh.setFormatter(formatter)
+        framework_log.addHandler(gh)
+
+    framework_log.info(f"V2 Logging Initialized at level {logging.getLevelName(level)}")
+    return framework_log
+
+================================================================================
+### FILE: pylabcontrol_v2/utils/decorators.py ###
+================================================================================
+
+import functools
+import logging
+import time
+from pylabcontrol_v2.utils.logging_manager import LogTiers
+
+logger = logging.getLogger(LogTiers.ACTION)
+
+def instrument_logger(func):
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs):
+        start_time = time.perf_counter()
+        try:
+            result = func(self, *args, **kwargs)
+            duration = (time.perf_counter() - start_time) * 1000
+            logger.info(
+                f"[{self.instrument_id}] {func.__name__} executed in {duration:.2f}ms",
+                extra={"inst_id": self.instrument_id}
+            )
+            return result
+        except Exception as e:
+            logger.error(f"[{self.instrument_id}] {func.__name__} FAILED: {str(e)}")
+            raise
+    return wrapper
+
+================================================================================
+### FILE: pylabcontrol_v2/adapters/visa_adapter.py ###
+================================================================================
+
+import pyvisa as visa
+from .base_adapter import BaseAdapter
+
+class VISAAdapter(BaseAdapter):
+    """
+    Adapter for VISA-compliant instruments (GPIB, USB-TMC, TCPIP::INSTR).
+    Refactored from the legacy ConnectionManager.
+    """
+    def __init__(self, address: str, timeout: int = 5000, term_chars: str = '\n', **kwargs):
+        super().__init__(address, **kwargs)
+        self.rm = visa.ResourceManager()
+        self.inst = self.rm.open_resource(address)
+        self.inst.timeout = timeout
+        self.inst.write_termination = term_chars
+        self.inst.read_termination = term_chars
+
+    def write(self, command: str):
+        self.inst.write(command)
+
+    def read(self) -> str:
+        return self.inst.read().strip()
+
+    def query(self, command: str) -> str:
+        return self.inst.query(command).strip()
+
+    def close(self):
+        self.inst.close()
+        self.rm.close()
+
+================================================================================
+### FILE: pylabcontrol_v2/adapters/mock_adapter.py ###
+================================================================================
+
+from .base_adapter import BaseAdapter
+
+class MockAdapter(BaseAdapter):
+    """
+    Simulation Adapter. Returns pre-defined responses 
+    to simulate physical hardware.
+    """
+    def __init__(self, address: str = "MOCK::ID", **kwargs):
+        super().__init__(address, **kwargs)
+        self.responses = {
+            "*IDN?": "PyLabControl, MockInstrument, V2-Alpha",
+            "*OPC?": "1"
+        }
+        self.last_written = None
+
+    def write(self, command: str):
+        self.last_written = command
+        # You could add logic here to update internal state (e.g. power on/off)
+
+    def read(self) -> str:
+        return self.responses.get(self.last_written, "MOCK_OK")
+
+    def query(self, command: str) -> str:
+        self.write(command)
+        return self.read()
+
+    def close(self):
+        pass
+
+================================================================================
+### FILE: pylabcontrol_v2/adapters/__init__.py ###
+================================================================================
+
+
+
+================================================================================
+### FILE: pylabcontrol_v2/adapters/tcp_adapter.py ###
+================================================================================
+
+import socket
+from .base_adapter import BaseAdapter
+
+class TCPAdapter(BaseAdapter):
+    """Adapter for raw TCP/IP Socket communication."""
+
+    def __init__(self, address: str, port: int = 5025, timeout: float = 5.0, **kwargs):
+        super().__init__(address, **kwargs)
+        self.port = port
+        self.timeout = timeout
+        self.sock = None
+        self._connect()
+
+    def _connect(self):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.settimeout(self.timeout)
+        self.sock.connect((self.address, self.port))
+
+    def write(self, command: str):
+        full_cmd = (command + '\n').encode('ascii')
+        self.sock.sendall(full_cmd)
+
+    def read(self) -> str:
+        return self.sock.recv(4096).decode('ascii').strip()
+
+    def query(self, command: str) -> str:
+        self.write(command)
+        return self.read()
+
+    def close(self):
+        if self.sock:
+            self.sock.close()
+
+================================================================================
+### FILE: pylabcontrol_v2/adapters/base_adapter.py ###
+================================================================================
+
+from abc import ABC, abstractmethod
+import logging
+from pylabcontrol_v2.utils.logging_manager import LogTiers
+
+class BaseAdapter(ABC):
+    """
+    Abstract Base Class for all PyLabControl transport layers.
+    Every adapter must implement these primitives.
+    """
+    def __init__(self, address: str, instrument_id: str = None):
+        self.address = address
+        self.instrument_id = instrument_id or address
+        # All transport traffic goes here
+        self.logger = logging.getLogger(LogTiers.TRANSPORT)
+
+    @abstractmethod
+    def write(self, command: str):
+        """Send a string command to the hardware."""
+        pass
+
+    @abstractmethod
+    def read(self) -> str:
+        """Read a string response from the hardware."""
+        pass
+
+    @abstractmethod
+    def query(self, command: str) -> str:
+        """Atomic Write + Read operation."""
+        pass
+
+    @abstractmethod
+    def close(self):
+        """Cleanly release the hardware resource."""
+        pass
+
+================================================================================
+### FILE: pylabcontrol_v2/instruments/optical_power_meters/__init__.py ###
+================================================================================
+
+import time
+import re
+from typing import List, Any
+from pint import Quantity
 from pylabcontrol_v2.core.base_instrument import BaseInstrument
+from pylabcontrol_v2.core.descriptors import MetricParameter, InstrumentParameter
 
-# 1. Create a Mock Adapter
-mock_dev = MockAdapter(address="GPIB::1")
+class OPM(BaseInstrument):
+    """
+    Standardized Category Base for Optical Power Meters (OPM).
+    Provides a universal interface via the Data Acquisition Trinity 
+    (Read, Initiate, Fetch) and normalizes all readings to Pint Quantities.
+    """
 
-# 2. Injected Load (Assuming you have a 'laser' folder in 'instruments' and a TOML)
-# For this test, we can even instantiate the BaseInstrument directly
+    # =========================================================================
+    # CORE NOUNS (MetricParameters - Continuous Values)
+    # =========================================================================
 
-instr = BaseInstrument(adapter=mock_dev)
+    wavelength = MetricParameter(
+        scpi_set="set_wavelength", 
+        scpi_get="get_wavelength", 
+        unit="nm", 
+        limits_key="wavelength"
+    )
+    """Calibration wavelength for the detector diode."""
 
-print(f"Testing IDN: {instr.idn()}")
-instr.reset()
-print("Phase 1: Connectivity, Unit Management, and Adapter Injection Verified.")
+    averaging_time = MetricParameter(
+        scpi_set="set_averaging_time", 
+        scpi_get="get_averaging_time", 
+        unit="s", 
+        limits_key="averaging_time"
+    )
+    """Integration time for a single sample."""
+
+    sample_count = MetricParameter(
+        scpi_set="set_sample_count",
+        scpi_get="get_sample_count",
+        unit="",
+        limits_key="sample_count"
+    )
+    """Number of samples to acquire per hardware trigger."""
+
+    correction_factor = MetricParameter(
+        scpi_set="set_correction_factor",
+        scpi_get="get_correction_factor",
+        unit="dB",
+        limits_key="correction_factor"
+    )
+    """Global offset applied to all power readings (e.g., for tap couplers)."""
+
+    # =========================================================================
+    # CORE ADJECTIVES (InstrumentParameters - Discrete States)
+    # =========================================================================
+
+    power_unit = InstrumentParameter(
+        scpi_set="set_power_unit", 
+        scpi_get="get_power_unit", 
+        allowed=["W", "DBM", "DB"]
+    )
+    """Hardware display unit. Note: fetch/read methods resolve unit dynamically."""
+
+    auto_range = InstrumentParameter(
+        scpi_set="set_auto_range", 
+        scpi_get="get_auto_range", 
+        allowed=["ON", "OFF", "1", "0"]
+    )
+    """Toggles hardware auto-ranging."""
+
+    range_level = InstrumentParameter(
+        scpi_set="set_range", 
+        scpi_get="get_range", 
+        allowed=None # Hydrated by TOML 'range_modes'
+    )
+    """Manual hardware gain/range setting."""
+
+    # =========================================================================
+    # EXECUTION VERBS (Data Acquisition Trinity)
+    # =========================================================================
+
+    def read(self) -> List[Quantity]:
+        """
+        Standard blocking measurement.
+        Triggers the hardware, waits for completion, and returns the data array.
+        """
+        cmd = self._get_command("read")
+        raw_res = self.adapter.query(cmd)
+        return self._parse_buffer(raw_res)
+
+    def initiate(self) -> None:
+        """Arms the hardware trigger model for background acquisition."""
+        cmd = self._get_command("initiate")
+        self.adapter.write(cmd)
+
+    def fetch(self) -> List[Quantity]:
+        """Retrieves buffered data from internal memory after an initiate() call."""
+        cmd = self._get_command("fetch")
+        raw_res = self.adapter.query(cmd)
+        return self._parse_buffer(raw_res)
+
+    # =========================================================================
+    # HARDWARE ACTIONS
+    # =========================================================================
+
+    def zero(self, wait: bool = True) -> None:
+        """Executes dark-current zeroing offset."""
+        cmd = self._get_command("zero")
+        self.log.info(f"[{self.instrument_id}] Zeroing sensor...")
+        self.adapter.write(cmd)
+        
+        if wait:
+            guard_time = self.config.metadata.get("zero_duration", 2.0)
+            time.sleep(guard_time)
+            if self.config.scpi_commands.get("opc_query"):
+                self.adapter.query(self.config.scpi_commands.get("opc_query"))
+
+    def set_reference(self) -> None:
+        """Sets the current power level as the 0dB relative reference point."""
+        cmd = self._get_command("set_reference")
+        self.adapter.write(cmd)
+
+    # =========================================================================
+    # INTERNAL HELPERS
+    # =========================================================================
+
+    def _get_command(self, key: str) -> str:
+        cmd = self.config.scpi_commands.get(key)
+        if not cmd:
+            raise NotImplementedError(f"Hardware capability '{key}' is not defined in TOML.")
+        return cmd
+
+    def _parse_buffer(self, raw_data: str) -> List[Quantity]:
+        """Parses CSV responses and assigns the current hardware unit."""
+        # Query unit directly or assume W/dBm based on current state
+        # (Implementation of _get_current_unit left to proxy or basic mapping)
+        unit = "W" if "W" in str(self.power_unit).upper() else "dBm"
+        parts = raw_data.split(',')
+        return [self.validate_level(self._clean_response(p), unit, context="Buffer") 
+                for p in parts if p.strip()]
+
+    def _clean_response(self, raw_res: str) -> str:
+        match = re.search(r'([+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)', raw_res)
+        if match: return match.group(1)
+        raise ValueError(f"Unparseable response: {raw_res}")
 
 ================================================================================
-### FILE: scripts\test_laser_connection.py ###
+### FILE: pylabcontrol_v2/instruments/optical_power_meters/newport/__init__.py ###
+================================================================================
+
+
+
+================================================================================
+### FILE: pylabcontrol_v2/instruments/optical_power_meters/newport/np_1830c.py ###
+================================================================================
+
+from typing import List, Union
+from pint import Quantity
+from pylabcontrol_v2.instruments.optical_power_meters import OPM
+
+class Newport1830C(OPM):
+    """
+    Concrete driver for the legacy Newport 1830C Power Meter.
+    Translates PyLabControl V2's continuous physics vocabulary into 
+    the discrete integer mapping required by the hardware.
+    """
+
+    # =========================================================================
+    # PROPERTY INTERCEPTORS (The Translation Layer)
+    # =========================================================================
+
+    @property
+    def power_unit(self) -> str:
+        res = self.adapter.query(self._get_command("get_power_unit")).strip()
+        # Hardware Map: 1=Watts, 2=dB, 3=dBm
+        mapping = {"1": "W", "2": "DB", "3": "DBM"}
+        return mapping.get(res, "W")
+
+    @power_unit.setter
+    def power_unit(self, value: str) -> None:
+        state = self.validate_state(str(value).upper(), ["W", "DBM", "DB"], context="Power Unit")
+        mapping = {"W": "1", "DB": "2", "DBM": "3"}
+        self.adapter.write(self._get_command("set_power_unit").format(value=mapping[state]))
+
+    @property
+    def averaging_time(self) -> Quantity:
+        res = self.adapter.query(self._get_command("get_averaging_time")).strip()
+        # Hardware Map: 1=Slow, 2=Medium, 3=Fast. Map to estimated physics seconds.
+        mapping = {"1": 10.0, "2": 1.0, "3": 0.01}
+        return self.validate_level(mapping.get(res, 1.0), "s", context="Averaging Time")
+
+    @averaging_time.setter
+    def averaging_time(self, value: Union[float, str, Quantity]) -> None:
+        qty = self.validate_level(value, "s", context="Averaging Time")
+        # Invert the mapping: closest physical time to discrete hardware state
+        if qty.magnitude < 0.1:
+            val = "3" # Fast
+        elif qty.magnitude < 5.0:
+            val = "2" # Medium
+        else:
+            val = "1" # Slow
+            
+        self.adapter.write(self._get_command("set_averaging_time").format(value=val))
+
+    @property
+    def auto_range(self) -> str:
+        """The 1830C uses Range '0' for Auto."""
+        res = self.adapter.query(self._get_command("get_range")).strip()
+        return "ON" if res == "0" else "OFF"
+
+    @auto_range.setter
+    def auto_range(self, value: str) -> None:
+        state = self.validate_state(str(value), ["ON", "OFF", "1", "0"], context="Auto Range")
+        if state in ["ON", "1"]:
+            self.adapter.write("R0")
+        else:
+            # Revert to a safe, middle manual range if disabled
+            self.adapter.write("R4")
+
+    # =========================================================================
+    # EXECUTION OVERRIDES (Handling Missing Capabilities)
+    # =========================================================================
+
+    def initiate(self) -> None:
+        """The 1830C has no internal data buffer or standard trigger model."""
+        self.log.warning(f"[{self.instrument_id}] Hardware buffering not supported by 1830C.")
+        # Fails gracefully without throwing an error
+
+    def fetch(self) -> List[Quantity]:
+        """Degrades gracefully to a standard single-point read."""
+        self.log.warning(f"[{self.instrument_id}] Fetch degrades to single Read on 1830C.")
+        return self.read()
+
+================================================================================
+### FILE: pylabcontrol_v2/instruments/signal_generators/__init__.py ###
+================================================================================
+
+import time
+from typing import Union, Any
+from pint import Quantity
+from pylabcontrol_v2.core.base_instrument import BaseInstrument
+from pylabcontrol_v2.core.descriptors import MetricParameter, InstrumentParameter
+
+class SigGen(BaseInstrument):
+    """
+    Standardized Category Base for RF/Microwave Signal Generators.
+    
+    Provides a universal interface for Keysight, Anritsu, and Rohde & Schwarz sources.
+    All properties are mathematically bounded by the TOML limits and seamlessly 
+    support Pint dimensional units (e.g., 'MHz', 'GHz', 'dBm').
+    """
+
+    # =========================================================================
+    # CORE NOUNS (Tier-2 Descriptors)
+    # =========================================================================
+
+    frequency = MetricParameter(
+        scpi_set="set_frequency", 
+        scpi_get="get_frequency", 
+        unit="Hz", 
+        limits_key="frequency"
+    )
+    """Target RF carrier frequency. Returns a Pint Quantity in Hertz."""
+
+    power = MetricParameter(
+        scpi_set="set_power", 
+        scpi_get="get_power", 
+        unit="dBm", 
+        limits_key="power"
+    )
+    """Target RF output power amplitude. Returns a Pint Quantity in dBm."""
+
+    # =========================================================================
+    # CORE ADJECTIVES (InstrumentParameters)
+    # =========================================================================
+
+    output = InstrumentParameter(
+        scpi_set="set_output_status", 
+        scpi_get="get_output_status", 
+        allowed=["ON", "OFF", "1", "0"]
+    )
+    """Master RF output amplifier state (ON/OFF)."""
+
+    modulation = InstrumentParameter(
+        scpi_set="set_modulation_status", 
+        scpi_get="get_modulation_status", 
+        allowed=["ON", "OFF", "1", "0"]
+    )
+    """Master modulation state (enables/disables AM, FM, Phase, or Pulse mod)."""
+
+    # =========================================================================
+    # HARDWARE ACTIONS
+    # =========================================================================
+
+    def wait_until_ready(self, timeout: float = 20.0) -> bool:
+        """
+        Generic handshake: Blocks execution until the synthesizer has finished 
+        tuning its oscillators and stabilizing power.
+        
+        Args:
+            timeout (float): Maximum seconds to wait before failing.
+            
+        Returns:
+            bool: True if operation completed, False if it timed out.
+        """
+        self.log.info(f"[{self.instrument_id}] Waiting for PLL lock and settling...")
+        opc_cmd = self.config.scpi_commands.get("opc_query", "*OPC?")
+        
+        start_time = time.time()
+        while (time.time() - start_time) < timeout:
+            try:
+                # *OPC? typically returns '1' when the hardware queue is empty
+                res = self.adapter.query(opc_cmd).strip()
+                if "1" in res:
+                    self.log.info(f"[{self.instrument_id}] Hardware READY.")
+                    return True
+            except Exception as e:
+                self.log.debug(f"[{self.instrument_id}] OPC query failed: {e}")
+                
+            time.sleep(0.5)
+            
+        self.log.warning(f"[{self.instrument_id}] Hardware wait timed out!")
+        return False
+
+================================================================================
+### FILE: pylabcontrol_v2/instruments/tunable_laser_sources/__init__.py ###
+================================================================================
+
+import time
+from typing import Union, Any
+from pint import Quantity
+from pylabcontrol_v2.core.base_instrument import BaseInstrument
+from pylabcontrol_v2.core.descriptors import MetricParameter, InstrumentParameter
+
+class TLS(BaseInstrument):
+    """
+    Standardized Category Base for Tunable Laser Sources (TLS).
+    
+    Provides a universal interface for Agilent, Santec, Keysight, and EXFO lasers.
+    All continuous properties are mathematically bounded by the TOML limits.
+    """
+
+    # --- CORE NOUNS (Tier-2 Descriptors) ---
+
+    wavelength = MetricParameter(
+        scpi_set="set_wavelength", 
+        scpi_get="get_wavelength", 
+        unit="nm", 
+        limits_key="wavelength"
+    )
+    """Target output wavelength. Returns a Pint Quantity in nanometers."""
+
+    power = MetricParameter(
+        scpi_set="set_power", 
+        scpi_get="get_power", 
+        unit="dBm", 
+        limits_key="power"
+    )
+    """Target optical output power. Returns a Pint Quantity (typically dBm or W)."""
+
+    # --- CORE ADJECTIVES (InstrumentParameters) ---
+
+    output = InstrumentParameter(
+        scpi_set="set_output_status", 
+        scpi_get="get_output_status", 
+        allowed=["ON", "OFF", "1", "0"]
+    )
+    """Master optical shutter or laser diode output state."""
+
+    # --- CORE VERBS (Methods) ---
+
+    def wait_until_ready(self, timeout: float = 20.0) -> bool:
+        """
+        Generic handshake: Blocks execution until the laser has finished 
+        tuning its motors and stabilizing its power control loops.
+        
+        By default, this relies on the standard IEEE 488.2 *OPC? query.
+        Legacy instruments (like the Santec TSL-210) must override this 
+        in their concrete proxy class to implement manual polling.
+        
+        Args:
+            timeout (float): Maximum seconds to wait before failing.
+            
+        Returns:
+            bool: True if operation completed, False if it timed out.
+        """
+        self.log.info(f"[{self.instrument_id}] Waiting for tuning completion...")
+        opc_cmd = self.config.scpi_commands.get("opc_query", "*OPC?")
+        
+        start_time = time.time()
+        while (time.time() - start_time) < timeout:
+            try:
+                # *OPC? typically returns '1' when the hardware queue is empty
+                res = self.adapter.query(opc_cmd).strip()
+                if "1" in res:
+                    self.log.info(f"[{self.instrument_id}] Hardware READY.")
+                    return True
+            except Exception as e:
+                self.log.debug(f"[{self.instrument_id}] OPC query failed: {e}")
+                
+            time.sleep(0.5)
+            
+        self.log.warning(f"[{self.instrument_id}] Hardware wait timed out!")
+        return False
+
+================================================================================
+### FILE: pylabcontrol_v2/instruments/tunable_laser_sources/santec/tsl_210.py ###
+================================================================================
+
+import re
+import time
+from typing import Optional, Union, Any, Dict
+from pint import Quantity
+from pylabcontrol_v2.instruments.tunable_laser_sources import TLS
+
+class TSL210(TLS):
+    """
+    Concrete driver for the Santec TSL-210 Tunable Laser Source.
+
+    This class serves as an Explicit Proxy to handle legacy Santec quirks, 
+    including mechanical settling times, multi-command power sequences, 
+    and non-standard SCPI response formatting[cite: 310]. It implements 
+    full-capability support for Fine Tuning, Coherence Control, and 
+    hardware status parsing.
+    """
+
+    def __init__(self, config: Any, adapter: Any) -> None:
+        """
+        Initializes the TSL210 driver and applies hardware-specific setup.
+
+        Args:
+            config (InstrumentConfig): The validated TOML configuration schema.
+            adapter (BaseAdapter): The communication transport layer (VISA, TCP, or Mock).
+        """
+        super().__init__(config, adapter)
+        
+        # 1. ADAPTER AGNOSTICISM: Only tweak VISA backends if they exist [cite: 310]
+        if hasattr(self.adapter, 'inst'):
+            self.adapter.inst.read_termination = '\r\n'
+            self.adapter.inst.write_termination = '\r\n'
+        
+        # Initialize internal hardware state to known standard modes
+        self.adapter.write("SU0")
+        self.adapter.write("HD0")
+        
+        # Internal trackers for the polling loop (The "Intent" memory) [cite: 317]
+        self._target_wl: Optional[float] = None
+        self._target_pwr: Optional[float] = None
+        self._target_output: Optional[str] = None
+
+    @property
+    def status_report(self) -> Dict[str, Any]:
+        """
+        Parses the 6-digit 'SU' string into a diagnostic dictionary.
+
+        The format follows the manual specification: [-/none][6][5][4][3][2][1]
+        representing state flags like coherence, fine tuning, and errors .
+
+        Returns:
+            Dict[str, Any]: A dictionary containing parsed boolean states for 
+                'ld_on', 'coherence_on', 'fine_tuning_on', 'acc_mode', 
+                'temp_error', and the 'raw_status' string.
+        """
+        raw = self.adapter.query("SU").strip()
+        # Handle the leading '-' for LD ON
+        is_on = raw.startswith("-")
+        digits = raw.replace("-", "")
+        
+        # Guard against short strings
+        padded = digits.zfill(6)
+        
+        return {
+            "ld_on": is_on,
+            "coherence_on": padded[0] == "1",
+            "fine_tuning_on": padded[1] == "1",
+            "acc_mode": padded[2] == "1",
+            "temp_error": padded[3] == "1",
+            "raw_status": raw
+        }
+
+    # --- Properties with Target Tracking ---
+
+    @property
+    def wavelength(self) -> Quantity:
+        """
+        Queries the current wavelength and returns a normalized Quantity.
+
+        Returns:
+            Quantity: The current wavelength as a Pint Quantity in nanometers[cite: 321].
+        """
+        cmd = self.config.scpi_commands.get("get_wavelength", "WA?")
+        res = self.adapter.query(cmd)
+        return self.validate_level(self._clean_response(res), "nm", context="wavelength")
+
+    @wavelength.setter
+    def wavelength(self, value: Union[float, str, Quantity]) -> None:
+        """
+        Sets the target wavelength and stashes the intent for polling.
+
+        Note: Setting a new wavelength automatically resets Fine Tuning to 0.
+
+        Args:
+            value (Union[float, str, Quantity]): The target wavelength (e.g., 1550, "1550nm").
+        """
+        qty = self.validate_level(value, "nm", context="wavelength")
+        self._target_wl = qty.magnitude 
+        
+        # SCHEMA INTEGRITY: Fetch the template from the TOML and inject
+        cmd_template = self.config.scpi_commands.get("set_wavelength", "WA {value}")
+        self.adapter.write(cmd_template.format(value=f"{self._target_wl:.3f}"))
+
+    @property
+    def power(self) -> Quantity:
+        """
+        Queries the current optical power and returns a normalized Quantity.
+
+        Returns:
+            Quantity: The current power as a Pint Quantity in dBm[cite: 322].
+        """
+        cmd = self.config.scpi_commands.get("get_power", "OP?")
+        res = self.adapter.query(cmd)
+        return self.validate_level(self._clean_response(res), "dBm", context="power")
+
+    @power.setter
+    def power(self, value: Union[float, str, Quantity]) -> None:
+        """
+        Sets the target power using the mandatory Santec 'AF' sequence.
+
+        Args:
+            value (Union[float, str, Quantity]): The target power magnitude in dBm.
+        """
+        qty = self.validate_level(value, "dBm", context="power")
+        self._target_pwr = qty.magnitude 
+        
+        cmd_template = self.config.scpi_commands.get("set_power", "OP {value}")
+        self.adapter.write("AF") # Santec specific auto-filter trigger [cite: 317]
+        self.adapter.write(cmd_template.format(value=f"{self._target_pwr:.2f}"))
+
+    @property
+    def output(self) -> str:
+        """
+        Queries the laser output status (ON/OFF).
+
+        Returns:
+            str: 'ON' if hardware returns a negative status, else 'OFF'[cite: 318].
+        """
+        cmd = self.config.scpi_commands.get("get_output_status", "SU")
+        res = self.adapter.query(cmd).strip()
+        return "ON" if res.startswith("-") else "OFF"
+
+    @output.setter
+    def output(self, value: str) -> None:
+        """
+        Sets the laser output state.
+
+        Args:
+            value (str): The targeted state ('ON' or 'OFF').
+        """
+        state = self.validate_state(value, ["ON", "OFF"], context="output")
+        self._target_output = state 
+        
+        # Map human intent to hardware string templates [cite: 318]
+        cmd_template = self.config.scpi_commands.get("set_output_status", "L{value}")
+        hw_val = "O" if state == "ON" else "F"
+        self.adapter.write(cmd_template.format(value=hw_val))
+
+    # --- UNIQUE HARDWARE FUNCTIONS ---
+
+    @property
+    def control_mode(self) -> str:
+        """
+        Queries the current control mode (ACC or APC).
+
+        Returns:
+            str: 'ACC' if in constant current mode, else 'APC' (constant power).
+        """
+        return "ACC" if self.status_report["acc_mode"] else "APC"
+
+    @control_mode.setter
+    def control_mode(self, value: str) -> None:
+        """
+        Toggles between APC and ACC modes.
+
+        Args:
+            value (str): The target mode ('APC' or 'ACC').
+        """
+        mode = self.validate_state(value, ["APC", "ACC"], context="control_mode")
+        cmd = self.config.scpi_commands.get("set_acc_mode") if mode == "ACC" else \
+              self.config.scpi_commands.get("set_apc_mode")
+        self.adapter.write(cmd)
+
+    @property
+    def fine_tuning(self) -> float:
+        """
+        Queries the PZT-based fine tuning offset.
+
+        Returns:
+            float: The fine tuning amount in the range [-100, 100].
+        """
+        res = self.adapter.query(self.config.scpi_commands.get("get_fine_tuning"))
+        return float(self._clean_response(res))
+
+    @fine_tuning.setter
+    def fine_tuning(self, value: float) -> None:
+        """
+        Sets the fine tuning offset.
+
+        Args:
+            value (float): The target offset value.
+        """
+        cmd_template = self.config.scpi_commands.get("set_fine_tuning")
+        self.adapter.write(cmd_template.format(value=f"{value:.2f}"))
+
+    @property
+    def ld_current(self) -> Quantity:
+        """
+        Queries the current LD injection current.
+
+        Returns:
+            Quantity: The current injection current in mA.
+        """
+        res = self.adapter.query(self.config.scpi_commands.get("get_ld_current"))
+        return self.validate_level(self._clean_response(res), "mA", context="ld_current")
+
+    @ld_current.setter
+    def ld_current(self, value: Any) -> None:
+        """
+        Sets the LD injection current directly and forces ACC mode.
+
+        Args:
+            value (Union[float, str, Quantity]): The target current value.
+        """
+        self.control_mode = "ACC"
+        qty = self.validate_level(value, "mA", context="ld_current")
+        cmd_template = self.config.scpi_commands.get("set_ld_current")
+        self.adapter.write(cmd_template.format(value=f"{qty.magnitude:.2f}"))
+
+    @property
+    def coherence_control(self) -> bool:
+        """
+        Queries the coherence control (spectrum broadening) status.
+
+        Returns:
+            bool: True if coherence control is active.
+        """
+        return self.status_report["coherence_on"]
+
+    @coherence_control.setter
+    def coherence_control(self, value: bool) -> None:
+        """
+        Toggles coherence control ON or OFF.
+
+        Args:
+            value (bool): The target state.
+        """
+        cmd = self.config.scpi_commands.get("set_coherence_on") if value else \
+              self.config.scpi_commands.get("set_coherence_off")
+        self.adapter.write(cmd)
+
+    # --- REFINED HANDSHAKE ---
+
+    def wait_until_ready(self, timeout: float = 20.0) -> bool:
+        """
+        Polls the hardware until temperature stabilizes and targets are met.
+
+        This handshake monitors both the hardware temperature error bit
+        and the discrepancy between set targets and current readings[cite: 311].
+
+        Args:
+            timeout (float): Maximum seconds to wait before timing out.
+
+        Returns:
+            bool: True if the hardware is stable and at targets, False on timeout.
+        """
+        start_time = time.time()
+        while (time.time() - start_time) < timeout:
+            status = self.status_report
+            
+            # Check 1: Temperature Stability
+            if status["temp_error"]:
+                time.sleep(0.5)
+                continue
+            
+            # Check 2: Targets (Wavelength/Power/Output) [cite: 311]
+            if self._target_wl and abs(self.wavelength.magnitude - self._target_wl) > 0.005:
+                time.sleep(0.2)
+                continue
+
+            return True
+        return False
+
+    def _clean_response(self, raw_res: str) -> str:
+        """
+        Extracts the numerical magnitude from legacy hardware strings.
+
+        Uses regex to safely preserve scientific notation while stripping 
+        alphabetical units or dirty characters[cite: 319].
+
+        Args:
+            raw_res (str): The raw response from the hardware.
+
+        Returns:
+            str: A numeric string, or "0" if no match is found.
+        """
+        match = re.search(r'([+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)', raw_res)
+        return match.group(1) if match else "0"
+
+================================================================================
+### FILE: pylabcontrol_v2/instruments/tunable_laser_sources/santec/__init__.py ###
+================================================================================
+
+
+
+================================================================================
+### FILE: pylabcontrol_v2/instruments/tunable_laser_sources/agilent/ag_8164a.py ###
+================================================================================
+
+
+
+================================================================================
+### FILE: pylabcontrol_v2/instruments/tunable_laser_sources/agilent/__init__.py ###
+================================================================================
+
+
+
+================================================================================
+### FILE: pylabcontrol_v2/instruments/source_measure_units/__init__.py ###
+================================================================================
+
+import re
+from typing import List, Any, Union, Tuple
+from pint import Quantity
+from pylabcontrol_v2.core.base_instrument import BaseInstrument
+from pylabcontrol_v2.core.descriptors import InstrumentParameter, MetricParameter
+
+class SMU(BaseInstrument):
+    """
+    Standardized Category Base for Source Measure Units (SMU).
+    
+    Features a Dual-State engine to independently route commands 
+    based on the active Source Mode and the active Measure Mode.
+    Automatically handles compliance inversion (V-source -> I-limit).
+    """
+
+    # =========================================================================
+    # STATIC CORE DESCRIPTORS
+    # =========================================================================
+
+    source_mode = InstrumentParameter(
+        scpi_set="set_source_mode", 
+        scpi_get="get_source_mode", 
+        allowed=None # Hydrated by 'validation.source_modes'
+    )
+    
+    measure_mode = InstrumentParameter(
+        scpi_set="set_measure_mode", 
+        scpi_get="get_measure_mode", 
+        allowed=None # Hydrated by 'validation.measure_modes'
+    )
+
+    output = InstrumentParameter(
+        scpi_set="set_output_status", 
+        scpi_get="get_output_status", 
+        allowed=None # Hydrated by 'validation.output_modes'
+    )
+
+    sense_mode = InstrumentParameter(
+        scpi_set="set_sense_mode", 
+        scpi_get="get_sense_mode", 
+        allowed=None # Hydrated by 'validation.sense_modes'
+    )
+    """Toggles 2-wire vs 4-wire remote sensing."""
+
+    sample_count = MetricParameter(
+        scpi_set="set_sample_count",
+        scpi_get="get_sample_count",
+        unit="",
+        limits_key="sample_count"
+    )
+
+    # =========================================================================
+    # SOURCE-AWARE PROPERTIES (Driven by source_mode)
+    # =========================================================================
+
+    @property
+    def source_level(self) -> Quantity:
+        raw_val = self._source_mode_query("get_source_level")
+        unit = "V" if "VOLT" in self._get_safe_s_func() else "A"
+        return self.validate_level(raw_val, unit, context="source_level")
+
+    @source_level.setter
+    def source_level(self, value: Union[float, str, Quantity]) -> None:
+        unit = "V" if "VOLT" in self._get_safe_s_func() else "A"
+        qty = self.validate_level(value, unit, context="source_level")
+        self._source_mode_write("set_source_level", qty.magnitude, "source_level")
+
+    @property
+    def source_range(self) -> float:
+        return self._source_mode_query("get_source_range")
+
+    @source_range.setter
+    def source_range(self, value: Union[float, str]) -> None:
+        self._source_mode_write("set_source_range", value, "source_range")
+
+    @property
+    def compliance(self) -> Quantity:
+        """The safety limit applied to the output (Inverts source unit)."""
+        c_func, unit = self._get_compliance_unit_and_func()
+        cmd_template = self._get_command("get_compliance")
+        res = self.adapter.query(cmd_template.format(c_func=c_func))
+        return self.validate_level(self._clean_response(res), unit, context="compliance")
+
+    @compliance.setter
+    def compliance(self, value: Union[float, str, Quantity]) -> None:
+        c_func, unit = self._get_compliance_unit_and_func()
+        qty = self.validate_level(value, unit, context="compliance")
+        
+        cmd_template = self._get_command("set_compliance")
+        self.adapter.write(cmd_template.format(c_func=c_func, value=qty.magnitude))
+
+    # =========================================================================
+    # MEASURE-AWARE PROPERTIES (Driven by measure_mode)
+    # =========================================================================
+
+    @property
+    def measure_range(self) -> float:
+        return self._measure_mode_query("get_measure_range")
+
+    @measure_range.setter
+    def measure_range(self, value: Union[float, str]) -> None:
+        self._measure_mode_write("set_measure_range", value, "measure_range")
+
+    @property
+    def nplc(self) -> float:
+        return self._measure_mode_query("get_nplc")
+
+    @nplc.setter
+    def nplc(self, value: Union[float, str]) -> None:
+        self._measure_mode_write("set_nplc", value, "nplc")
+
+    # =========================================================================
+    # EXECUTION VERBS (Data Acquisition Trinity)
+    # =========================================================================
+
+    def read(self) -> List[Quantity]:
+        cmd = self._get_command("read")
+        raw_res = self.adapter.query(cmd)
+        return self._parse_buffer(raw_res)
+
+    def initiate(self) -> None:
+        cmd = self._get_command("initiate")
+        self.adapter.write(cmd)
+
+    def fetch(self) -> List[Quantity]:
+        cmd = self._get_command("fetch")
+        raw_res = self.adapter.query(cmd)
+        return self._parse_buffer(raw_res)
+
+    # =========================================================================
+    # INTERNAL DUAL-STATE ROUTING HELPERS
+    # =========================================================================
+
+    def _source_mode_query(self, cmd_key: str) -> float:
+        s_func = self._get_safe_s_func()
+        cmd_template = self._get_command(cmd_key)
+        res = self.adapter.query(cmd_template.format(s_func=s_func))
+        return float(self._clean_response(res))
+
+    def _measure_mode_query(self, cmd_key: str) -> float:
+        m_func = self._get_safe_m_func()
+        cmd_template = self._get_command(cmd_key)
+        res = self.adapter.query(cmd_template.format(m_func=m_func))
+        return float(self._clean_response(res))
+
+    def _source_mode_write(self, cmd_key: str, value: Any, param_name: str) -> None:
+        s_func = self._get_safe_s_func()
+        prefix = f"source_{s_func.lower()}"
+        self._gatekeeper_and_inject(cmd_key, s_func, "s_func", prefix, param_name, value)
+
+    def _measure_mode_write(self, cmd_key: str, value: Any, param_name: str) -> None:
+        m_func = self._get_safe_m_func()
+        prefix = f"measure_{m_func.lower().replace(':', '_')}"
+        self._gatekeeper_and_inject(cmd_key, m_func, "m_func", prefix, param_name, value)
+
+    def _gatekeeper_and_inject(self, cmd_key: str, func_val: str, placeholder: str, prefix: str, param_name: str, value: Any) -> None:
+        """Universal gatekeeper logic supporting both Source and Measure states."""
+        
+        # 1. Gatekeeper Fencing
+        allowed_params = self.config.validation.get(f"valid_{prefix}_parameters")
+        if allowed_params and param_name not in allowed_params:
+            raise NotImplementedError(f"'{param_name}' is invalid in {func_val} mode.")
+
+        # 2. Value Fencing
+        val_key_specific = f"valid_{prefix}_{param_name}s"
+        val_key_generic = f"valid_{param_name}"
+        allowed_values = self.config.validation.get(val_key_specific) or self.config.validation.get(val_key_generic)
+        
+        if allowed_values:
+            value = self.validate_state(str(value), allowed_values, context=f"{func_val} {param_name}")
+
+        # 3. Injection
+        cmd_template = self._get_command(cmd_key)
+        kwargs = {placeholder: func_val, "value": value}
+        self.adapter.write(cmd_template.format(**kwargs))
+
+    def _get_compliance_unit_and_func(self) -> Tuple[str, str]:
+        """Inverts the active source mode to return the compliance (limit) mode and unit."""
+        s_func = self._get_safe_s_func()
+        if "VOLT" in s_func:
+            return "CURR", "A"
+        return "VOLT", "V"
+
+    def _get_safe_s_func(self) -> str:
+        return str(self.source_mode).strip('"\'').upper()
+
+    def _get_safe_m_func(self) -> str:
+        return str(self.measure_mode).strip('"\'').upper()
+
+    def _get_command(self, key: str) -> str:
+        cmd = self.config.scpi_commands.get(key)
+        if not cmd:
+            raise NotImplementedError(f"Hardware capability '{key}' is missing in TOML.")
+        return cmd
+
+    def _parse_buffer(self, raw_data: str) -> List[Quantity]:
+        m_func = self._get_safe_m_func()
+        unit = "V" if "VOLT" in m_func else "A" if "CURR" in m_func else "ohm"
+        
+        parts = raw_data.split(',')
+        return [self.validate_level(self._clean_response(p), unit) for p in parts if p.strip()]
+
+    def _clean_response(self, raw_res: str) -> str:
+        match = re.search(r'([+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)', raw_res)
+        if match: return match.group(1)
+        raise ValueError(f"Unparseable response: {raw_res}")
+
+================================================================================
+### FILE: pylabcontrol_v2/instruments/digital_multi_meters/__init__.py ###
+================================================================================
+
+import re
+from typing import List, Any, Union
+from pint import Quantity
+from pylabcontrol_v2.core.base_instrument import BaseInstrument
+from pylabcontrol_v2.core.descriptors import InstrumentParameter, MetricParameter
+
+class DMM(BaseInstrument):
+    """
+    Standardized Category Base for Digital Multimeters (DMM).
+    
+    Handles polymorphic parameters (Volts, Amps, Ohms) by dynamically injecting 
+    the active measurement function into SCPI templates. It enforces strict 
+    Hardware Gatekeeping by validating parameter availability against the TOML.
+    """
+
+    # =========================================================================
+    # STATIC CORE DESCRIPTORS
+    # =========================================================================
+
+    measurement_mode = InstrumentParameter(
+        scpi_set="set_function", 
+        scpi_get="get_function", 
+        allowed=None # Hydrated by 'validation.measurement_modes'
+    )
+    """The active physical measurement function (e.g., 'VOLT:DC', 'RES')."""
+
+    sample_count = MetricParameter(
+        scpi_set="set_sample_count",
+        scpi_get="get_sample_count",
+        unit="",
+        limits_key="sample_count"
+    )
+    """Number of samples to acquire per trigger initiation."""
+
+    # =========================================================================
+    # FUNCTION-AWARE PROPERTIES (Polymorphic)
+    # =========================================================================
+
+    @property
+    def range_level(self) -> float:
+        """Hardware range level for the current measurement mode."""
+        return self._function_mode_query("get_range")
+
+    @range_level.setter
+    def range_level(self, value: Union[float, str]) -> None:
+        self._function_mode_write("set_range", value, "range")
+
+    @property
+    def auto_range(self) -> str:
+        """Auto-range state for the current measurement mode (ON/OFF)."""
+        res = self._function_mode_query("get_range_auto")
+        return "ON" if "1" in str(res) else "OFF"
+
+    @auto_range.setter
+    def auto_range(self, value: str) -> None:
+        self._function_mode_write("set_range_auto", self._bool_str(value), "range_auto")
+
+    @property
+    def nplc(self) -> float:
+        """Number of Power Line Cycles (integration time)."""
+        return self._function_mode_query("get_nplc")
+
+    @nplc.setter
+    def nplc(self, value: Union[float, str]) -> None:
+        self._function_mode_write("set_nplc", value, "nplc")
+
+    @property
+    def resolution(self) -> float:
+        """Measurement resolution for the current mode."""
+        return self._function_mode_query("get_resolution")
+
+    @resolution.setter
+    def resolution(self, value: Union[float, str]) -> None:
+        self._function_mode_write("set_resolution", value, "resolution")
+
+    @property
+    def zero_auto(self) -> str:
+        """Auto-Zero configuration (ON/OFF) for offset compensation."""
+        res = self._function_mode_query("get_zero_auto")
+        return "ON" if "1" in str(res) else "OFF"
+
+    @zero_auto.setter
+    def zero_auto(self, value: str) -> None:
+        self._function_mode_write("set_zero_auto", self._bool_str(value), "zero_auto")
+
+    @property
+    def terminals(self) -> str:
+        """Queries the active physical routing terminals (e.g., FRON or REAR)."""
+        cmd = self._get_command("get_terminals")
+        return self.adapter.query(cmd).strip()
+
+    # =========================================================================
+    # EXECUTION VERBS
+    # =========================================================================
+
+    def read(self) -> List[Quantity]:
+        """
+        Standard blocking measurement.
+        Triggers the hardware, waits for completion, and returns the data.
+        Respects the current configuration (NPLC, Range, Sample Count).
+        
+        Returns:
+            List[Quantity]: A list of measurements. If sample_count == 1, 
+                            returns a list containing a single Quantity.
+        """
+        cmd = self._get_command("read")
+        raw_res = self.adapter.query(cmd)
+        return self._parse_buffer(raw_res)
+
+    def initiate(self) -> None:
+        """
+        Arms the hardware trigger model for background acquisition.
+        Non-blocking. Data must be retrieved later using fetch().
+        """
+        cmd = self._get_command("initiate")
+        self.adapter.write(cmd)
+
+    def fetch(self) -> List[Quantity]:
+        """
+        Retrieves buffered data from internal memory after an initiate() call.
+        Does NOT trigger a new measurement.
+        
+        Returns:
+            List[Quantity]: A list of buffered measurements.
+        """
+        cmd = self._get_command("fetch")
+        raw_res = self.adapter.query(cmd)
+        return self._parse_buffer(raw_res)
+
+    def _parse_buffer(self, raw_data: str) -> List[Quantity]:
+        """Helper to split CSV responses and apply the correct physical unit."""
+        unit = self._resolve_current_unit()
+        parts = raw_data.split(',')
+        return [self.validate_level(self._clean_response(p), unit, context="Data Buffer") 
+                for p in parts if p.strip()]
+
+    # =========================================================================
+    # INTERNAL CONTEXT-AWARE ROUTING HELPERS
+    # =========================================================================
+
+    def _function_mode_query(self, cmd_key: str) -> float:
+        """Helper to safely query a command bound to the active measurement function."""
+        func = self._get_safe_func()
+        cmd_template = self._get_command(cmd_key)
+        res = self.adapter.query(cmd_template.format(func=func))
+        return float(self._clean_response(res))
+
+    def _function_mode_write(self, cmd_key: str, value: Any, param_name: str) -> None:
+        """
+        Safely injects commands based on the active measurement mode.
+        Acts as a Gatekeeper to prevent invalid parameters for the current mode.
+        """
+        func = self._get_safe_func() # e.g., "VOLT:DC"
+        prefix = func.lower().replace(':', '_') # e.g., "volt_dc"
+        
+        # 1. THE GATEKEEPER: Is this parameter physically supported in this mode?
+        allowed_params_key = f"valid_{prefix}_parameters"
+        allowed_params = self.config.validation.get(allowed_params_key)
+        
+        if allowed_params and param_name not in allowed_params:
+            self.log.error(f"[{self.instrument_id}] '{param_name}' is invalid in {func} mode.")
+            raise NotImplementedError(
+                f"The {self.config.model} does not support setting '{param_name}' "
+                f"while in '{func}' measurement mode."
+            )
+
+        # 2. THE VALIDATOR: Is the numerical/string value safe?
+        # Tries specific array first (e.g., valid_volt_dc_ranges), falls back to generic (e.g., valid_nplc)
+        val_key_specific = f"valid_{prefix}_{param_name}s"
+        val_key_generic = f"valid_{param_name}"
+        
+        allowed_values = self.config.validation.get(val_key_specific) or self.config.validation.get(val_key_generic)
+        
+        if allowed_values:
+            value = self.validate_state(str(value), allowed_values, context=f"{func} {param_name}")
+            
+        # 3. THE INJECTOR: Send to hardware
+        cmd_template = self._get_command(cmd_key)
+        self.adapter.write(cmd_template.format(func=func, value=value))
+
+    def _get_command(self, key: str) -> str:
+        cmd = self.config.scpi_commands.get(key)
+        if not cmd:
+            raise NotImplementedError(f"Hardware capability '{key}' is not defined in TOML.")
+        return cmd
+
+    def _get_safe_func(self) -> str:
+        """Retrieves active mode and strips surrounding quotes if present."""
+        return str(self.measurement_mode).strip('"\'')
+
+    def _bool_str(self, value: str) -> str:
+        """Converts human ON/OFF intents to hardware 1/0 strings."""
+        state = self.validate_state(str(value), ["ON", "OFF", "1", "0"], context="Boolean")
+        return "1" if state in ["ON", "1"] else "0"
+
+    def _resolve_current_unit(self) -> str:
+        mode = self._get_safe_func().upper()
+        if "VOLT" in mode: return "V"
+        if "CURR" in mode: return "A"
+        if "RES" in mode:  return "ohm"
+        if "CAP" in mode:  return "F"
+        if "FREQ" in mode: return "Hz"
+        return ""
+
+    def _clean_response(self, raw_res: str) -> str:
+        match = re.search(r'([+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)', raw_res)
+        if match: return match.group(1)
+        raise ValueError(f"Unparseable response: {raw_res}")
+
+================================================================================
+### FILE: pylabcontrol_v2/configs/optical_power_meters/newport/np_1830c.toml ###
+================================================================================
+
+# ==============================================================================
+# PYLABCONTROL V2 - OPTICAL POWER METER MASTER TEMPLATE
+# ==============================================================================
+# Description: Universal configuration schema for standard IEEE 488.2 OPMs.
+# ==============================================================================
+
+brand = "Newport"
+model = "NP_1830C"
+version = "2.2.0"
+
+[scpi_commands]
+
+# ==============================================================================
+# CORE FUNCTIONS (MANDATORY FOR OPM BASE)
+# ==============================================================================
+# --- MEASUREMENT NOUNS ---
+set_wavelength = "W{value}"
+get_wavelength = "W?"
+set_averaging_time = "F{value}"
+get_averaging_time = "F?"
+
+# --- CONFIGURATION ADJECTIVES ---
+set_power_unit = "U{value}"
+get_power_unit = "U?"
+set_range = "R{value}"
+get_range = "R?"
+
+# --- HARDWARE ACTIONS ---
+zero = "O"
+
+# --- THE DATA ACQUISITION TRINITY ---
+read = "D?"
+
+[limits]
+[limits.wavelength]
+min = 190.0
+max = 1800.0
+unit = "nm"
+
+
+[validation]
+power_units = ["W", "DBM", "DB"]
+range_modes = ["1", "2", "3", "4", "5", "6", "7", "8"] # Hardware discrete ranges
+
+
+[defaults]
+wavelength = "1550 nm"
+power_unit = "W"
+
+[metadata]
+# Explict Routing -> Forces the Factory to use the Proxy Class below
+driver_category = "optical_power_meters"
+driver_file = "np_1830c"
+driver_class = "Newport1830C"
+domain = "photonics"
+classification = "sensor"
+is_module = false
+
+
+================================================================================
+### FILE: pylabcontrol_v2/configs/tunable_laser_sources/santec/tsl210.toml ###
+================================================================================
+
+# ==============================================================================
+# PYLABCONTROL V2 - SANTEC TSL-210 CONFIGURATION
+# ==============================================================================
+# Description: Specific configuration for the Santec TSL-210 Tunable Laser.
+# Note: Wavelength, Power, and Output are intercepted by the explicit proxy 
+# driver to support hardware polling and specific string quirks.
+# ==============================================================================
+
+brand = "Santec"
+model = "TSL210"
+version = "2.1.0"
+
+[scpi_commands]
+# ------------------------------------------------------------------------------
+# 1. IEEE 488.2 STANDARD OVERRIDES
+# ------------------------------------------------------------------------------
+idn = "ID?"
+
+# ==============================================================================
+# CORE FUNCTIONS (MANDATORY INTERFACE FOR TLS BASE)
+# ==============================================================================
+set_wavelength = "WA {value}"
+get_wavelength = "WA?"
+set_power = "OP {value}"
+get_power = "OP?"
+set_output_status = "L{value}" # L+O = ON, L+F = OFF
+get_output_status = "SU"
+
+# ------------------------------------------------------------------------------
+# ADDITIONAL FUNCTIONS
+# ------------------------------------------------------------------------------
+set_ld_current = "CU {value}"
+get_ld_current = "CU?"
+set_ld_temp = "TL {value}"
+get_ld_temp = "TL?"
+set_acc_mode = "AO"            # ACC Mode (Constant Current)
+set_apc_mode = "AF"            # APC Mode (Constant Power)
+set_coherence_on = "CO"
+set_coherence_off = "CF"
+set_fine_tuning = "FT {value}"
+get_fine_tuning = "FT?"
+set_attenuator = "AT {value}"
+get_attenuator = "AT?"
+
+
+[limits]
+# ------------------------------------------------------------------------------
+# PHYSICAL BOUNDARIES
+# ------------------------------------------------------------------------------
+[limits.wavelength]
+min = 1260.0
+max = 1630.0
+unit = "nm"
+
+[limits.power]
+min = -10.0
+max = 13.0
+unit = "dBm"
+
+[limits.ld_current]
+min = 0.0
+max = 200.0 # Standard diode safety
+unit = "mA"
+
+[limits.fine_tuning]
+min = -100.0
+max = 100.0
+unit = "percent" # Maps to +/- 100 range in manual
+
+[validation]
+# ------------------------------------------------------------------------------
+# DISCRETE STATE LISTS (Enforced by InstrumentParameter Descriptors)
+# ------------------------------------------------------------------------------
+output_modes = ["ON", "OFF"]
+control_modes = ["APC", "ACC"]
+
+
+[defaults]
+# ------------------------------------------------------------------------------
+# INITIALIZATION STATES
+# ------------------------------------------------------------------------------
+wavelength = "1550 nm"
+power = "0 dBm"
+output = "OFF"
+control_mode = "APC"
+
+
+[metadata]
+# ------------------------------------------------------------------------------
+# TOPOLOGICAL DIRECTIVES
+# ------------------------------------------------------------------------------
+is_mainframe = false         
+is_module = false            
+is_multichannel = false      
+channel_count = 1            
+
+# ------------------------------------------------------------------------------
+# EXPLICIT PROXY ROUTING
+# ------------------------------------------------------------------------------
+# Explicitly maps to pylabcontrol_v2/instruments/lasers/santec.py -> class TSL210
+driver_category = "lasers"               
+driver_file = "santec"              
+driver_class = "TSL210"         
+
+# ------------------------------------------------------------------------------
+# CAPABILITY FLAGS (Consumed by UI and Script Logic)
+# ------------------------------------------------------------------------------
+domain = "photonics"
+classification = "source"
+
+# ------------------------------------------------------------------------------
+# HARDWARE SPECIFIC (Consumed by UI and Script Logic)
+# ------------------------------------------------------------------------------
+
+================================================================================
+### FILE: pylabcontrol_v2/configs/00_templates/signal_generators.toml ###
+================================================================================
+
+# ==============================================================================
+# PYLABCONTROL V2 - SIGNAL GENERATOR MASTER TEMPLATE
+# ==============================================================================
+# Description: Universal configuration schema for RF/Microwave Signal Generators.
+# ==============================================================================
+
+brand = "TEMPLATE"
+model = "SIGGEN_GENERIC"
+version = "2.2.0"
+
+[scpi_commands]
+reset = "*RST"
+idn = "*IDN?"
+opc_query = "*OPC?"
+
+# ==============================================================================
+# CORE FUNCTIONS (MANDATORY FOR SIGGEN BASE)
+# ==============================================================================
+set_frequency = "SOUR:FREQ:CW {value}"
+get_frequency = "SOUR:FREQ:CW?"
+set_power = "SOUR:POW:LEV:IMM:AMPL {value}"
+get_power = "SOUR:POW:LEV:IMM:AMPL?"
+set_output_status = "OUTP:STAT {value}"
+get_output_status = "OUTP:STAT?"
+set_modulation_status = "OUTP:MOD:STAT {value}"
+get_modulation_status = "OUTP:MOD:STAT?"
+
+
+[trigger.scpi_commands]
+# ==============================================================================
+# UNIVERSAL TRIGGER SUBSYSTEM (For Frequency/Power List Sweeps)
+# ==============================================================================
+set_source = "TRIG:SOUR {value}"
+get_source = "TRIG:SOUR?"
+set_delay = "TRIG:DEL {value}"
+get_delay = "TRIG:DEL?"
+set_count = "TRIG:COUN {value}"
+get_count = "TRIG:COUN?"
+fire = "*TRG"
+abort = "ABOR"
+
+
+[limits]
+[limits.frequency]
+min = 1000.0         # 1 kHz
+max = 40000000000.0  # 40 GHz
+unit = "Hz"
+
+[limits.power]
+min = -120.0
+max = 20.0
+unit = "dBm"
+
+[trigger.limits.delay]
+min = 0.0
+max = 3600.0
+unit = "s"
+
+[trigger.limits.count]
+min = 1
+max = 1000000
+unit = ""
+
+
+[validation]
+output_modes = ["ON", "OFF", "1", "0"]
+modulation_modes = ["ON", "OFF", "1", "0"]
+[trigger.validation]
+sources = ["IMM", "EXT", "BUS", "TIM"]
+
+
+[defaults]
+frequency = "1 GHz"
+power = "-20 dBm"
+output = "OFF"
+modulation = "OFF"
+
+
+[metadata]
+is_mainframe = false         
+is_module = false            
+driver_category = "signal_generators"               
+domain = "electrical"
+classification = "source"
+
+================================================================================
+### FILE: pylabcontrol_v2/configs/00_templates/tunable_laser_sources.toml ###
+================================================================================
+
+# ==============================================================================
+# PYLABCONTROL V2 - TLS MASTER TEMPLATE
+# ==============================================================================
+# Description: Universal configuration schema for Tunable Laser Sources.
+# Instructions: Copy this file, rename to the specific model, and replace 
+# the SCPI commands with the hardware-specific syntax.
+# ==============================================================================
+
+brand = "TEMPLATE"
+model = "TLS_GENERIC"
+version = "2.2.0"
+
+[scpi_commands]
+# ------------------------------------------------------------------------------
+# 1. IEEE 488.2 STANDARD OVERRIDES
+# ------------------------------------------------------------------------------
+reset = "*RST"
+idn = "*IDN?"
+opc_query = "*OPC?"
+
+# ==============================================================================
+# CORE FUNCTIONS (MANDATORY INTERFACE FOR TLS BASE)
+# ==============================================================================
+set_wavelength    = "SOUR:WAV {value}"
+get_wavelength    = "SOUR:WAV?"
+set_power         = "SOUR:POW {value}"
+get_power         = "SOUR:POW?"
+set_output_status = "OUTP:STAT {value}"
+get_output_status = "OUTP:STAT?"
+
+# ------------------------------------------------------------------------------
+# ADDITIONAL FUNCTIONS (OPTIONAL)
+# ------------------------------------------------------------------------------
+# e.g., set_sweep_speed = "SOUR:WAV:SWE:SPE {value}"
+
+
+[limits]
+# ------------------------------------------------------------------------------
+# CORE PHYSICAL BOUNDARIES
+# ------------------------------------------------------------------------------
+[limits.wavelength]
+min = 1500.0
+max = 1600.0
+unit = "nm"
+
+[limits.power]
+min = -20.0
+max = 10.0
+unit = "dBm"
+
+
+[validation]
+# ------------------------------------------------------------------------------
+# DISCRETE STATE LISTS
+# ------------------------------------------------------------------------------
+output_modes = ["ON", "OFF", "1", "0"]
+
+
+[defaults]
+# ------------------------------------------------------------------------------
+# INITIALIZATION STATES
+# ------------------------------------------------------------------------------
+wavelength = "1550 nm"
+power = "0 dBm"
+output = "OFF"
+
+
+[metadata]
+# ------------------------------------------------------------------------------
+# TOPOLOGICAL DIRECTIVES
+# ------------------------------------------------------------------------------
+is_mainframe = false         
+is_module = false            
+is_multichannel = false      
+channel_count = 1            
+
+# ------------------------------------------------------------------------------
+# EXPLICIT PROXY ROUTING
+# ------------------------------------------------------------------------------
+driver_category = "tunable_laser_sources"               
+# driver_file = "vendor_name"              
+# driver_class = "ClassName"         
+
+# ------------------------------------------------------------------------------
+# CAPABILITY FLAGS (Consumed by UI and Script Logic)
+# ------------------------------------------------------------------------------
+domain = "photonics"
+classification = "source"
+
+[trigger]
+# ==============================================================================
+# UNIVERSAL TRIGGER SUBSYSTEM
+# ==============================================================================
+[trigger.scpi_commands]
+set_source = "TRIG:SOUR {value}"
+get_source = "TRIG:SOUR?"
+set_delay = "TRIG:DEL {value}"
+get_delay = "TRIG:DEL?"
+set_count = "TRIG:COUN {value}"
+get_count = "TRIG:COUN?"
+set_timer = "TRIG:TIM {value}"
+get_timer = "TRIG:TIM?"
+fire = "*TRG"
+abort = "ABOR"
+
+[trigger.limits]
+[trigger.limits.delay]
+min = 0.0
+max = 3600.0
+unit = "s"
+
+[trigger.limits.count]
+min = 1
+max = 1000000
+unit = ""
+
+[trigger.limits.timer]
+min = 0.0001
+max = 3600.0
+unit = "s"
+
+[trigger.validation]
+# IMM = Immediate (Run Free)
+# EXT = External BNC
+# BUS = Software (*TRG)
+# TIM = Internal Timer
+sources = ["IMM", "EXT", "BUS", "TIM"]
+
+================================================================================
+### FILE: pylabcontrol_v2/configs/00_templates/source_measure_units.toml ###
+================================================================================
+
+# ==============================================================================
+# PYLABCONTROL V2 - SMU MASTER TEMPLATE
+# ==============================================================================
+# Description: Universal configuration schema for Source Measure Units.
+# Note: Features Dual-State Injection. Commands with {s_func} rely on the Source 
+# Mode, while {m_func} rely on the Measure Mode.
+# ==============================================================================
+
+brand = "TEMPLATE"
+model = "SMU_GENERIC"
+version = "2.2.0"
+
+[scpi_commands]
+reset = "*RST"
+idn = "*IDN?"
+
+# ==============================================================================
+# CORE FUNCTIONS (MANDATORY FOR SMU BASE)
+# ==============================================================================
+# --- GLOBAL SETTINGS ---
+set_source_mode = "SOUR:FUNC {value}"
+get_source_mode = "SOUR:FUNC?"
+set_measure_mode = "SENS:FUNC \"{value}\""
+get_measure_mode = "SENS:FUNC?"
+set_output_status = "OUTP:STAT {value}"
+get_output_status = "OUTP:STAT?"
+set_sense_mode = "SYST:RSEN {value}" # 2-wire vs 4-wire (Remote Sense)
+get_sense_mode = "SYST:RSEN?"
+set_sample_count = "SAMP:COUN {value}"
+get_sample_count = "SAMP:COUN?"
+
+# --- SOURCE-AWARE SETTINGS (Requires {s_func} injection) ---
+set_source_level = "SOUR:{s_func}:LEV {value}"
+get_source_level = "SOUR:{s_func}:LEV?"
+set_source_range = "SOUR:{s_func}:RANG {value}"
+get_source_range = "SOUR:{s_func}:RANG?"
+# Note: Compliance uses {c_func}, which is the INVERSE of the source mode
+set_compliance = "SENS:{c_func}:PROT {value}"
+get_compliance = "SENS:{c_func}:PROT?"
+
+# --- MEASURE-AWARE SETTINGS (Requires {m_func} injection) ---
+set_measure_range = "SENS:{m_func}:RANG {value}"
+get_measure_range = "SENS:{m_func}:RANG?"
+set_nplc = "SENS:{m_func}:NPLC {value}"
+get_nplc = "SENS:{m_func}:NPLC?"
+
+# --- EXECUTION ACTIONS ---
+read = "READ?"
+initiate = "INIT"
+fetch = "FETC?"
+
+
+[limits]
+[limits.sample_count]
+min = 1
+max = 1000000
+unit = ""
+
+
+[validation]
+# ------------------------------------------------------------------------------
+# 1. DISCRETE MODES
+# ------------------------------------------------------------------------------
+source_modes = ["VOLT", "CURR"]
+measure_modes = ["VOLT:DC", "CURR:DC", "RES"]
+sense_modes = ["ON", "OFF", "1", "0"] # ON = 4-wire, OFF = 2-wire
+output_modes = ["ON", "OFF", "1", "0"]
+
+# ------------------------------------------------------------------------------
+# 2. PARAMETER FENCING (The Gatekeeper Lists)
+# ------------------------------------------------------------------------------
+# Source Gatekeepers
+valid_source_volt_parameters = ["source_level", "source_range", "compliance"]
+valid_source_curr_parameters = ["source_level", "source_range", "compliance"]
+
+# Measure Gatekeepers
+valid_measure_volt_dc_parameters = ["measure_range", "nplc"]
+valid_measure_curr_dc_parameters = ["measure_range", "nplc"]
+valid_measure_res_parameters = ["measure_range", "nplc"]
+
+# ------------------------------------------------------------------------------
+# 3. VALUE FENCING (Dynamic Physical Limits)
+# ------------------------------------------------------------------------------
+# Voltages
+valid_source_volt_ranges = ["0.2", "2", "20", "200"]
+valid_measure_volt_dc_ranges = ["0.2", "2", "20", "200"]
+
+# Currents
+valid_source_curr_ranges = ["10E-6", "100E-6", "1E-3", "10E-3", "100E-3", "1"]
+valid_measure_curr_dc_ranges = ["10E-6", "100E-6", "1E-3", "10E-3", "100E-3", "1"]
+
+# NPLC
+valid_nplc = ["0.01", "0.1", "1", "10"]
+
+
+[defaults]
+source_mode = "VOLT"
+measure_mode = "CURR:DC"
+output = "OFF"
+sample_count = "1"
+
+
+[metadata]
+is_mainframe = false         
+is_module = false            
+driver_category = "source_measure_units"               
+domain = "electrical"
+classification = "hybrid"
+
+[trigger]
+# ==============================================================================
+# UNIVERSAL TRIGGER SUBSYSTEM
+# ==============================================================================
+[trigger.scpi_commands]
+set_source = "TRIG:SOUR {value}"
+get_source = "TRIG:SOUR?"
+set_delay = "TRIG:DEL {value}"
+get_delay = "TRIG:DEL?"
+set_count = "TRIG:COUN {value}"
+get_count = "TRIG:COUN?"
+set_timer = "TRIG:TIM {value}"
+get_timer = "TRIG:TIM?"
+fire = "*TRG"
+abort = "ABOR"
+
+[trigger.limits]
+[trigger.limits.delay]
+min = 0.0
+max = 3600.0
+unit = "s"
+
+[trigger.limits.count]
+min = 1
+max = 1000000
+unit = ""
+
+[trigger.limits.timer]
+min = 0.0001
+max = 3600.0
+unit = "s"
+
+[trigger.validation]
+# IMM = Immediate (Run Free)
+# EXT = External BNC
+# BUS = Software (*TRG)
+# TIM = Internal Timer
+sources = ["IMM", "EXT", "BUS", "TIM"]
+
+================================================================================
+### FILE: pylabcontrol_v2/configs/00_templates/optical_power_meters.toml ###
+================================================================================
+
+# ==============================================================================
+# PYLABCONTROL V2 - OPTICAL POWER METER MASTER TEMPLATE
+# ==============================================================================
+# Description: Universal configuration schema for standard IEEE 488.2 OPMs.
+# ==============================================================================
+
+brand = "TEMPLATE"
+model = "OPM_GENERIC"
+version = "2.2.0"
+
+[scpi_commands]
+reset = "*RST"
+idn = "*IDN?"
+opc_query = "*OPC?"
+
+# ==============================================================================
+# CORE FUNCTIONS (MANDATORY FOR OPM BASE)
+# ==============================================================================
+# --- MEASUREMENT NOUNS ---
+set_wavelength = "SENS:POW:WAV {value}"
+get_wavelength = "SENS:POW:WAV?"
+set_averaging_time = "SENS:POW:ATIM {value}"
+get_averaging_time = "SENS:POW:ATIM?"
+set_sample_count = "SAMP:COUN {value}"
+get_sample_count = "SAMP:COUN?"
+
+# --- CONFIGURATION ADJECTIVES ---
+set_power_unit = "SENS:POW:UNIT {value}"
+get_power_unit = "SENS:POW:UNIT?"
+set_auto_range = "SENS:POW:RANG:AUTO {value}"
+get_auto_range = "SENS:POW:RANG:AUTO?"
+set_range = "SENS:POW:RANG {value}"
+get_range = "SENS:POW:RANG?"
+
+# --- HARDWARE ACTIONS ---
+zero = "CAL:ZERO:AUTO ONCE"
+
+# --- THE DATA ACQUISITION TRINITY ---
+read = "READ?"
+initiate = "INIT"
+fetch = "FETC?"
+
+# ==============================================================================
+# ADDITIONAL FUNCTIONS (OPTIONAL)
+# ==============================================================================
+set_correction_factor = "SENS:CORR {value}"
+get_correction_factor = "SENS:CORR?"
+set_reference = "SENS:POW:REF:STAT ONCE"
+
+
+[limits]
+[limits.wavelength]
+min = 400.0
+max = 1700.0
+unit = "nm"
+
+[limits.averaging_time]
+min = 0.0001
+max = 10.0
+unit = "s"
+
+[limits.sample_count]
+min = 1
+max = 1000000
+unit = ""
+
+[limits.correction_factor]
+min = -200.0
+max = 200.0
+unit = "dB"
+
+
+[validation]
+range_modes = ["MIN", "MAX", "10NW", "1UW", "100UW", "10MW"] # Hardware specific
+power_units = ["W", "DBM", "DB"]
+
+
+[defaults]
+wavelength = "1550 nm"
+sample_count = "1"
+auto_range = "ON"
+
+
+[metadata]
+zero_duration = 3.0   
+is_mainframe = false         
+is_module = false            
+is_multichannel = false      
+channel_count = 1            
+
+driver_category = "optical_power_meters"               
+domain = "photonics"
+classification = "sensor"
+
+[trigger]
+# ==============================================================================
+# UNIVERSAL TRIGGER SUBSYSTEM
+# ==============================================================================
+[trigger.scpi_commands]
+set_source = "TRIG:SOUR {value}"
+get_source = "TRIG:SOUR?"
+set_delay = "TRIG:DEL {value}"
+get_delay = "TRIG:DEL?"
+set_count = "TRIG:COUN {value}"
+get_count = "TRIG:COUN?"
+set_timer = "TRIG:TIM {value}"
+get_timer = "TRIG:TIM?"
+fire = "*TRG"
+abort = "ABOR"
+
+[trigger.limits]
+[trigger.limits.delay]
+min = 0.0
+max = 3600.0
+unit = "s"
+
+[trigger.limits.count]
+min = 1
+max = 1000000
+unit = ""
+
+[trigger.limits.timer]
+min = 0.0001
+max = 3600.0
+unit = "s"
+
+[trigger.validation]
+# IMM = Immediate (Run Free)
+# EXT = External BNC
+# BUS = Software (*TRG)
+# TIM = Internal Timer
+sources = ["IMM", "EXT", "BUS", "TIM"]
+
+================================================================================
+### FILE: pylabcontrol_v2/configs/00_templates/digital_multi_meters.toml ###
+================================================================================
+
+# ==============================================================================
+# PYLABCONTROL V2 - DMM MASTER TEMPLATE
+# ==============================================================================
+# Description: Universal configuration schema for Digital Multimeters.
+# Note: SCPI commands containing {func} are dynamically injected by the base 
+# class depending on the active measurement_mode.
+# ==============================================================================
+
+brand = "TEMPLATE"
+model = "DMM_GENERIC"
+version = "2.3.0"
+
+[scpi_commands]
+# ------------------------------------------------------------------------------
+# 1. IEEE 488.2 STANDARD OVERRIDES
+# ------------------------------------------------------------------------------
+reset = "*RST"
+idn = "*IDN?"
+
+# ==============================================================================
+# CORE FUNCTIONS (MANDATORY FOR DMM BASE)
+# ==============================================================================
+# --- GLOBAL SETTINGS ---
+set_function = "SENS:FUNC \"{value}\""
+get_function = "SENS:FUNC?"
+set_sample_count = "SAMP:COUN {value}"
+get_sample_count = "SAMP:COUN?"
+get_terminals = "ROUT:TERM?"
+
+# --- FUNCTION-AWARE SETTINGS (Requires {func} injection) ---
+set_range = "SENS:{func}:RANG {value}"
+get_range = "SENS:{func}:RANG?"
+set_range_auto = "SENS:{func}:RANG:AUTO {value}"
+get_range_auto = "SENS:{func}:RANG:AUTO?"
+set_resolution = "SENS:{func}:RES {value}"
+get_resolution = "SENS:{func}:RES?"
+set_nplc = "SENS:{func}:NPLC {value}"
+get_nplc = "SENS:{func}:NPLC?"
+set_zero_auto = "SENS:{func}:ZERO:AUTO {value}"
+get_zero_auto = "SENS:{func}:ZERO:AUTO?"
+
+# --- EXECUTION ---
+read = "READ?"
+initiate = "INIT"
+fetch = "FETC?"
+
+
+[limits]
+# ------------------------------------------------------------------------------
+# CORE PHYSICAL BOUNDARIES (Dimensionless/Global)
+# ------------------------------------------------------------------------------
+[limits.sample_count]
+min = 1
+max = 1000000
+unit = ""
+
+
+[validation]
+# ------------------------------------------------------------------------------
+# 1. DISCRETE MODES
+# ------------------------------------------------------------------------------
+measurement_modes = ["VOLT:DC", "VOLT:AC", "CURR:DC", "CURR:AC", "RES", "FRES", "FREQ"]
+
+# ------------------------------------------------------------------------------
+# 2. PARAMETER FENCING (The Gatekeeper Lists)
+# Defines exactly which properties are legally accessible in each mode.
+# ------------------------------------------------------------------------------
+valid_volt_dc_parameters = ["range", "range_auto", "resolution", "nplc", "zero_auto", "null_state"]
+valid_volt_ac_parameters = ["range", "range_auto", "resolution", "null_state"]
+valid_curr_dc_parameters = ["range", "range_auto", "resolution", "nplc", "zero_auto", "null_state"]
+valid_res_parameters     = ["range", "range_auto", "resolution", "nplc", "zero_auto", "null_state"]
+
+# ------------------------------------------------------------------------------
+# 3. VALUE FENCING (The Dynamic Hardware Limits)
+# ------------------------------------------------------------------------------
+valid_volt_dc_ranges = ["100E-3", "1", "10", "100", "1E3"]
+valid_volt_ac_ranges = ["100E-3", "1", "10", "100", "750"]
+valid_curr_dc_ranges = ["10E-6", "100E-6", "1E-3", "10E-3", "100E-3", "1", "3"]
+valid_nplc           = ["0.001", "0.02", "0.2", "1", "10", "100"] 
+
+
+[defaults]
+# ------------------------------------------------------------------------------
+# INITIALIZATION STATES
+# ------------------------------------------------------------------------------
+measurement_mode = "VOLT:DC"
+sample_count = "1"
+auto_range = "ON"
+
+
+[metadata]
+# ------------------------------------------------------------------------------
+# TOPOLOGICAL DIRECTIVES & ROUTING
+# ------------------------------------------------------------------------------
+is_mainframe = false         
+is_module = false            
+is_multichannel = false      
+channel_count = 1            
+
+driver_category = "digital_multimeters"               
+domain = "electrical"
+classification = "sensor"
+
+[trigger]
+# ==============================================================================
+# UNIVERSAL TRIGGER SUBSYSTEM
+# ==============================================================================
+[trigger.scpi_commands]
+set_source = "TRIG:SOUR {value}"
+get_source = "TRIG:SOUR?"
+set_delay = "TRIG:DEL {value}"
+get_delay = "TRIG:DEL?"
+set_count = "TRIG:COUN {value}"
+get_count = "TRIG:COUN?"
+set_timer = "TRIG:TIM {value}"
+get_timer = "TRIG:TIM?"
+fire = "*TRG"
+abort = "ABOR"
+
+[trigger.limits]
+[trigger.limits.delay]
+min = 0.0
+max = 3600.0
+unit = "s"
+
+[trigger.limits.count]
+min = 1
+max = 1000000
+unit = ""
+
+[trigger.limits.timer]
+min = 0.0001
+max = 3600.0
+unit = "s"
+
+[trigger.validation]
+# IMM = Immediate (Run Free)
+# EXT = External BNC
+# BUS = Software (*TRG)
+# TIM = Internal Timer
+sources = ["IMM", "EXT", "BUS", "TIM"]
+
+================================================================================
+### FILE: pylabcontrol_v2/configs/00_templates/mainframes.toml ###
+================================================================================
+
+# ==============================================================================
+# PYLABCONTROL V2 - MAINFRAME/CHASSIS MASTER TEMPLATE
+# ==============================================================================
+# Description: Defines the topological multiplexer. Owns the physical adapter.
+# Path: configs/mainframes/{brand}/{model}.toml
+# ==============================================================================
+
+brand = "VENDOR_NAME"
+model = "MODEL_NUMBER"
+version = "2.1.0"
+
+[scpi_commands]
+# ------------------------------------------------------------------------------
+# IEEE 488.2 STANDARD OVERRIDES
+# ------------------------------------------------------------------------------
+# Framework falls back to defaults (*RST, *IDN?) if these are omitted.
+reset = "*RST"
+idn = "*IDN?"
+clear_status = "*CLS"
+
+# ------------------------------------------------------------------------------
+# TOPOLOGICAL DISCOVERY (Required for ChassisBase)
+# ------------------------------------------------------------------------------
+# REQUIRED: The exact SCPI query used to interrogate a specific slot.
+# Must contain the {slot} placeholder for dynamic nodal injection.
+discovery_query = "SLOT{slot}:IDN?"
+
+[limits]
+# Mainframes generally do not have limits as they do not own physical parameters.
+# Leave empty unless the chassis has global sensors (e.g., backplane_temp).
+
+[validation]
+# Empty for standard mainframes. Use if the chassis has discrete global states.
+
+[defaults]
+# Empty for standard mainframes. Use for global chassis initialization.
+
+[metadata]
+# ------------------------------------------------------------------------------
+# ARCHITECTURAL FLAGS (Consumed by Factory and ChassisBase)
+# ------------------------------------------------------------------------------
+# REQUIRED: Tells the Factory to route instantiation to ChassisBase.
+is_mainframe = true
+is_module = false
+
+# Defines the spatial bounds for the runtime discovery loop.
+max_slots = 4
+
+# Identifies unswappable hardware (e.g., Agilent 8164A built-in display/slot 0).
+main_slot_index = 0
+
+# ------------------------------------------------------------------------------
+# EXPLICIT DRIVER ROUTING (Optional)
+# ------------------------------------------------------------------------------
+# Only define these if the mainframe requires a custom subclass of ChassisBase.
+# driver_category = "mainframes"
+# driver_file = "vendor_name"
+# driver_class = "CustomChassisClass"
+
+# ------------------------------------------------------------------------------
+# CAPABILITY FLAGS
+# ------------------------------------------------------------------------------
+domain = "general"
+classification = "multiplexer"
+
+================================================================================
+### FILE: scripts/test_laser_connection.py ###
 ================================================================================
 
 import logging
@@ -2133,34 +3857,7 @@ if __name__ == "__main__":
     run_full_test()
 
 ================================================================================
-### FILE: scripts\test_units.py ###
-================================================================================
-
-from pylabcontrol_v2.utils.unit_manager import um
-
-def test_unit_logic():
-    print("--- Testing Unit Manager Robustness ---")
-    
-    # Test 1: String with units (User Input)
-    q1 = um.normalise_unit_input("1.55um", "nm")
-    print(f"User Input (1.55um) -> {q1}") # Should be 1550nm
-
-    # Test 2: Naked String (Hardware Output)
-    # This is what crashed your script!
-    q2 = um.normalise_unit_input("1550.0", "nm")
-    print(f"Hardware Output (1550.0) -> {q2}") # Should be 1550nm
-
-    # Test 3: Raw Float
-    q3 = um.normalise_unit_input(1550.0, "nm")
-    print(f"Raw Float (1550.0) -> {q3}") # Should be 1550nm
-
-    print("--- ALL UNIT TESTS PASSED ---")
-
-if __name__ == "__main__":
-    test_unit_logic()
-
-================================================================================
-### FILE: scripts\verify_pydantic_flow.py ###
+### FILE: scripts/verify_pydantic_flow.py ###
 ================================================================================
 
 from pylabcontrol_v2.utils.config_loader import ConfigLoader
@@ -2191,3 +3888,50 @@ def verify():
     print(f"PASS: IDN Command used: {instr.config.scpi_commands.get('idn', '*IDN?')}")
 
 if __name__ == "__main__": verify()
+
+================================================================================
+### FILE: scripts/test_units.py ###
+================================================================================
+
+from pylabcontrol_v2.utils.unit_manager import um
+
+def test_unit_logic():
+    print("--- Testing Unit Manager Robustness ---")
+    
+    # Test 1: String with units (User Input)
+    q1 = um.normalise_unit_input("1.55um", "nm")
+    print(f"User Input (1.55um) -> {q1}") # Should be 1550nm
+
+    # Test 2: Naked String (Hardware Output)
+    # This is what crashed your script!
+    q2 = um.normalise_unit_input("1550.0", "nm")
+    print(f"Hardware Output (1550.0) -> {q2}") # Should be 1550nm
+
+    # Test 3: Raw Float
+    q3 = um.normalise_unit_input(1550.0, "nm")
+    print(f"Raw Float (1550.0) -> {q3}") # Should be 1550nm
+
+    print("--- ALL UNIT TESTS PASSED ---")
+
+if __name__ == "__main__":
+    test_unit_logic()
+
+================================================================================
+### FILE: scripts/phase1_check.py ###
+================================================================================
+
+from pylabcontrol_v2.core.factory import load_instrument
+from pylabcontrol_v2.adapters.mock_adapter import MockAdapter
+from pylabcontrol_v2.core.base_instrument import BaseInstrument
+
+# 1. Create a Mock Adapter
+mock_dev = MockAdapter(address="GPIB::1")
+
+# 2. Injected Load (Assuming you have a 'laser' folder in 'instruments' and a TOML)
+# For this test, we can even instantiate the BaseInstrument directly
+
+instr = BaseInstrument(adapter=mock_dev)
+
+print(f"Testing IDN: {instr.idn()}")
+instr.reset()
+print("Phase 1: Connectivity, Unit Management, and Adapter Injection Verified.")

@@ -20,20 +20,30 @@ class TestNewport1830CHardware(BaseOPMHardwareContract):
         address = "GPIB0::4::INSTR"
         
         print(f"\n[SETUP] Connecting to physical Newport 1830-C at {address}...")
-        opm = Newport1830C(
-            address=address, 
-            brand="Newport", 
-            model="NP_1830C"
-        ) 
+        
+        # ---------------------------------------------------------------------
+        # THE V2 FACTORY METHOD
+        # ---------------------------------------------------------------------
+        from pylabcontrol_v2.core.factory import load_instrument
+        
+        # The factory automatically loads np_1830c.toml, detects the GPIB address,
+        # attaches the VISAAdapter, and returns the specific Newport1830C class!
+        opm = load_instrument(
+            category="optical_power_meters",
+            brand="newport",
+            model="np_1830c",
+            address=address
+        )
+        # ---------------------------------------------------------------------
         
         yield opm
         
         print("\n[TEARDOWN] Safely releasing Newport 1830-C...")
-        # Return to a safe, continuous reading state
         opm.auto_range = "ON"
         opm.power_unit = "W"
         
-        # Note: No *RST is sent because the 1830C does not support it.
+        # Safely close the transport layer (BaseInstrument has a close() method)
+        opm.close()
 
     # =========================================================================
     # CORE OVERRIDES (Handling Hardware Limitations)
